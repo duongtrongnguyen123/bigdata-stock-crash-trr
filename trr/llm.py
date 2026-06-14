@@ -225,6 +225,63 @@ class ReasoningLLM(ABC):
             "Return ONLY JSON: {\"crash_prob\": 0..1, \"rationale\": \"...\"}.\n"
         )
 
+    # --- batched execution across many days (the speed path) --------------
+    def generate_batch(self, prompts: list[str], max_new_tokens: int = 512,
+                       temperature: float = 0.0) -> list[str]:
+        """Generate for many prompts. Default: sequential. Subclasses with a
+        real model override this to batch the forward pass."""
+        return [self.generate(p, max_new_tokens, temperature) for p in prompts]
+
+    @staticmethod
+    def _parse_batch_edges(raw: str, items: list[NewsItem]) -> list[ImpactEdge]:
+        data = extract_json(raw) or []
+        edges: list[ImpactEdge] = []
+        for d in data if isinstance(data, list) else []:
+            try:
+                idx = int(d["news_idx"])
+            except (KeyError, ValueError, TypeError):
+                continue
+            if idx < 0 or idx >= len(items):
+                continue
+            news = items[idx]
+            try:
+                edges.append(ImpactEdge(
+                    subject=str(d["subject"]).upper(),
+                    object=str(d["object"]).upper(),
+                    polarity=1 if int(d.get("polarity", -1)) >= 0 else -1,
+                    weight=max(0.0, min(1.0, float(d.get("weight", 0.5)))),
+                    timestamp=news.timestamp,
+                    source_news_id=news.id,
+                    rationale=str(d.get("rationale", "")),
+                ))
+            except (KeyError, ValueError, TypeError):
+                continue
+        return edges
+
+    def brainstorm_multi(self, day_items_list: list[list[NewsItem]],
+                        candidate_assets: list[str], max_items: int = 40,
+                        max_new_tokens: int = 512) -> list[list[ImpactEdge]]:
+        """Batched Brainstorming: one prompt per day, all generated together."""
+        capped = [items[:max_items] for items in day_items_list]
+        prompts = [self._impact_batch_prompt(items, candidate_assets) for items in capped]
+        raws = self.generate_batch(prompts, max_new_tokens=max_new_tokens)
+        return [self._parse_batch_edges(raw, items) for items, raw in zip(capped, raws)]
+
+    def reason_multi(self, tuples_list: list[list[tuple]], contexts: list[str],
+                    max_new_tokens: int = 256) -> list[tuple[float, str]]:
+        """Batched Reasoning: one prompt per day, all generated together."""
+        prompts = [self._reason_prompt(t, c) for t, c in zip(tuples_list, contexts)]
+        raws = self.generate_batch(prompts, max_new_tokens=max_new_tokens)
+        out: list[tuple[float, str]] = []
+        for raw in raws:
+            data = extract_json(raw) or {}
+            try:
+                prob = float(data.get("crash_prob", 0.0))
+            except (TypeError, ValueError):
+                prob = 0.0
+            out.append((max(0.0, min(1.0, prob)), str(data.get("rationale", ""))))
+        return out
+
 
 class MockLLM(ReasoningLLM):
     """Deterministic heuristic backend for offline pipeline testing.
@@ -290,6 +347,15 @@ class MockLLM(ReasoningLLM):
         prob = max(0.0, min(1.0, 0.15 + 0.7 * frac_neg + 0.02 * min(neg, 10)))
         return prob, f"{neg}/{len(tuples)} negative impacts toward portfolio"
 
+    # Use the deterministic heuristics (not the stub generate) in batched mode.
+    def brainstorm_multi(self, day_items_list, candidate_assets, max_items=40,
+                        max_new_tokens=512):
+        return [self.extract_impacts_batch(items, candidate_assets, max_items)
+                for items in day_items_list]
+
+    def reason_multi(self, tuples_list, contexts, max_new_tokens=256):
+        return [self.predict_crash(t, c) for t, c in zip(tuples_list, contexts)]
+
 
 class HFReasoningLLM(ReasoningLLM):
     """Local HuggingFace causal-LM backend (e.g. NVIDIA Nemotron) — zero-shot.
@@ -354,3 +420,40 @@ class HFReasoningLLM(ReasoningLLM):
             out = self.model.generate(input_ids, **gen_kwargs)
         gen = out[0][input_ids.shape[1]:]
         return self.tokenizer.decode(gen, skip_special_tokens=True)
+
+    def generate_batch(self, prompts: list[str], max_new_tokens: int = 512,
+                       temperature: float = 0.0, batch_size: int = 24) -> list[str]:
+        """True batched generation with left padding, chunked to bound VRAM."""
+        torch = self._torch
+        tok = self.tokenizer
+        if tok.pad_token is None:
+            tok.pad_token = tok.eos_token
+        results: list[str] = []
+        n_chunks = (len(prompts) + batch_size - 1) // batch_size
+        for ci, s in enumerate(range(0, len(prompts), batch_size)):
+            chunk = prompts[s : s + batch_size]
+            texts = []
+            for p in chunk:
+                try:
+                    texts.append(tok.apply_chat_template(
+                        [{"role": "user", "content": p}],
+                        add_generation_prompt=True, tokenize=False))
+                except Exception:
+                    texts.append(p)
+            old_side = tok.padding_side
+            tok.padding_side = "left"
+            enc = tok(texts, return_tensors="pt", padding=True, truncation=True,
+                      max_length=self.max_input_tokens)
+            tok.padding_side = old_side
+            enc = {k: v.to(self.device) for k, v in enc.items()}
+            gk = dict(max_new_tokens=max_new_tokens, do_sample=temperature > 0,
+                      pad_token_id=tok.pad_token_id or tok.eos_token_id)
+            if temperature > 0:
+                gk["temperature"] = temperature
+            with torch.no_grad():
+                out = self.model.generate(**enc, **gk)
+            in_len = enc["input_ids"].shape[1]
+            for i in range(out.shape[0]):
+                results.append(tok.decode(out[i][in_len:], skip_special_tokens=True))
+            print(f"[gen] batch {ci + 1}/{n_chunks} ({len(chunk)} prompts) done", flush=True)
+        return results

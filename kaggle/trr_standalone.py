@@ -22,7 +22,7 @@ from datetime import date, datetime
 import numpy as np
 import pandas as pd
 
-BUILD_TAG = "standalone-v2-calib"
+BUILD_TAG = "standalone-v3-batch-full"
 
 
 class config:  # shim: only HISTORICAL_DIR is referenced by the inlined code
@@ -354,6 +354,63 @@ class ReasoningLLM(ABC):
             "Return ONLY JSON: {\"crash_prob\": 0..1, \"rationale\": \"...\"}.\n"
         )
 
+    # --- batched execution across many days (the speed path) --------------
+    def generate_batch(self, prompts: list[str], max_new_tokens: int = 512,
+                       temperature: float = 0.0) -> list[str]:
+        """Generate for many prompts. Default: sequential. Subclasses with a
+        real model override this to batch the forward pass."""
+        return [self.generate(p, max_new_tokens, temperature) for p in prompts]
+
+    @staticmethod
+    def _parse_batch_edges(raw: str, items: list[NewsItem]) -> list[ImpactEdge]:
+        data = extract_json(raw) or []
+        edges: list[ImpactEdge] = []
+        for d in data if isinstance(data, list) else []:
+            try:
+                idx = int(d["news_idx"])
+            except (KeyError, ValueError, TypeError):
+                continue
+            if idx < 0 or idx >= len(items):
+                continue
+            news = items[idx]
+            try:
+                edges.append(ImpactEdge(
+                    subject=str(d["subject"]).upper(),
+                    object=str(d["object"]).upper(),
+                    polarity=1 if int(d.get("polarity", -1)) >= 0 else -1,
+                    weight=max(0.0, min(1.0, float(d.get("weight", 0.5)))),
+                    timestamp=news.timestamp,
+                    source_news_id=news.id,
+                    rationale=str(d.get("rationale", "")),
+                ))
+            except (KeyError, ValueError, TypeError):
+                continue
+        return edges
+
+    def brainstorm_multi(self, day_items_list: list[list[NewsItem]],
+                        candidate_assets: list[str], max_items: int = 40,
+                        max_new_tokens: int = 512) -> list[list[ImpactEdge]]:
+        """Batched Brainstorming: one prompt per day, all generated together."""
+        capped = [items[:max_items] for items in day_items_list]
+        prompts = [self._impact_batch_prompt(items, candidate_assets) for items in capped]
+        raws = self.generate_batch(prompts, max_new_tokens=max_new_tokens)
+        return [self._parse_batch_edges(raw, items) for items, raw in zip(capped, raws)]
+
+    def reason_multi(self, tuples_list: list[list[tuple]], contexts: list[str],
+                    max_new_tokens: int = 256) -> list[tuple[float, str]]:
+        """Batched Reasoning: one prompt per day, all generated together."""
+        prompts = [self._reason_prompt(t, c) for t, c in zip(tuples_list, contexts)]
+        raws = self.generate_batch(prompts, max_new_tokens=max_new_tokens)
+        out: list[tuple[float, str]] = []
+        for raw in raws:
+            data = extract_json(raw) or {}
+            try:
+                prob = float(data.get("crash_prob", 0.0))
+            except (TypeError, ValueError):
+                prob = 0.0
+            out.append((max(0.0, min(1.0, prob)), str(data.get("rationale", ""))))
+        return out
+
 
 class MockLLM(ReasoningLLM):
     """Deterministic heuristic backend for offline pipeline testing.
@@ -419,6 +476,15 @@ class MockLLM(ReasoningLLM):
         prob = max(0.0, min(1.0, 0.15 + 0.7 * frac_neg + 0.02 * min(neg, 10)))
         return prob, f"{neg}/{len(tuples)} negative impacts toward portfolio"
 
+    # Use the deterministic heuristics (not the stub generate) in batched mode.
+    def brainstorm_multi(self, day_items_list, candidate_assets, max_items=40,
+                        max_new_tokens=512):
+        return [self.extract_impacts_batch(items, candidate_assets, max_items)
+                for items in day_items_list]
+
+    def reason_multi(self, tuples_list, contexts, max_new_tokens=256):
+        return [self.predict_crash(t, c) for t, c in zip(tuples_list, contexts)]
+
 
 class HFReasoningLLM(ReasoningLLM):
     """Local HuggingFace causal-LM backend (e.g. NVIDIA Nemotron) — zero-shot.
@@ -483,6 +549,43 @@ class HFReasoningLLM(ReasoningLLM):
             out = self.model.generate(input_ids, **gen_kwargs)
         gen = out[0][input_ids.shape[1]:]
         return self.tokenizer.decode(gen, skip_special_tokens=True)
+
+    def generate_batch(self, prompts: list[str], max_new_tokens: int = 512,
+                       temperature: float = 0.0, batch_size: int = 24) -> list[str]:
+        """True batched generation with left padding, chunked to bound VRAM."""
+        torch = self._torch
+        tok = self.tokenizer
+        if tok.pad_token is None:
+            tok.pad_token = tok.eos_token
+        results: list[str] = []
+        n_chunks = (len(prompts) + batch_size - 1) // batch_size
+        for ci, s in enumerate(range(0, len(prompts), batch_size)):
+            chunk = prompts[s : s + batch_size]
+            texts = []
+            for p in chunk:
+                try:
+                    texts.append(tok.apply_chat_template(
+                        [{"role": "user", "content": p}],
+                        add_generation_prompt=True, tokenize=False))
+                except Exception:
+                    texts.append(p)
+            old_side = tok.padding_side
+            tok.padding_side = "left"
+            enc = tok(texts, return_tensors="pt", padding=True, truncation=True,
+                      max_length=self.max_input_tokens)
+            tok.padding_side = old_side
+            enc = {k: v.to(self.device) for k, v in enc.items()}
+            gk = dict(max_new_tokens=max_new_tokens, do_sample=temperature > 0,
+                      pad_token_id=tok.pad_token_id or tok.eos_token_id)
+            if temperature > 0:
+                gk["temperature"] = temperature
+            with torch.no_grad():
+                out = self.model.generate(**enc, **gk)
+            in_len = enc["input_ids"].shape[1]
+            for i in range(out.shape[0]):
+                results.append(tok.decode(out[i][in_len:], skip_special_tokens=True))
+            print(f"[gen] batch {ci + 1}/{n_chunks} ({len(chunk)} prompts) done", flush=True)
+        return results
 
 # ===================== trr/memory.py =====================
 
@@ -793,6 +896,7 @@ class TRRPipeline:
         mem_min_relevance: float = 0.5,
         batch: bool = False,
         max_items_per_day: int = 40,
+        cross_batch: bool = False,
     ) -> None:
         self.llm = llm if llm is not None else MockLLM()
         self.lam = lam
@@ -804,6 +908,11 @@ class TRRPipeline:
         # ~31k generations — the only feasible path on the GPU quota.
         self.batch = batch
         self.max_items_per_day = max_items_per_day
+        # cross_batch: batch the LLM calls ACROSS days (all brainstorm prompts in
+        # one batched pass, then all reason prompts) instead of day-by-day. Same
+        # results — the per-day memory/attention is still sequential — but the two
+        # LLM phases run as batched forwards, the big speedup for the full window.
+        self.cross_batch = cross_batch
         # Memory edges are carried into reasoning only while still salient; with
         # the exponential decay this lets a quiet day shed stale negatives so the
         # crash signal genuinely fades over time.
@@ -850,6 +959,45 @@ class TRRPipeline:
             n_edges=len(pruned),
         )
 
+    def _run_cross_batch(self, news_by_day: dict, dates: list) -> list:
+        """Phase-separated batched execution (same semantics as the per-day loop).
+
+        A: brainstorm ALL days in one batched LLM pass.
+        B: sequential memory update + decay + attention prune (no LLM) per day.
+        C: reason ALL days in one batched LLM pass.
+        """
+        day_news = [news_by_day.get(d, []) for d in dates]
+
+        # Phase A — batched brainstorming.
+        edges_per_day = self.llm.brainstorm_multi(
+            day_news, self.portfolio, max_items=self.max_items_per_day,
+        )
+
+        # Phase B — sequential memory/attention to build each day's reason input.
+        tuples_list, contexts, n_edges = [], [], []
+        for step, today_edges in enumerate(edges_per_day):
+            self.memory.update(today_edges, step)
+            decayed = self.memory.retrieve(step, self.lam)
+            salient = [e for e, r in decayed if r >= self.mem_min_relevance]
+            combined = today_edges + [e for e in salient if e not in today_edges]
+            pruned = pagerank_prune(combined, self.portfolio, top_k=self.top_k)
+            tuples_list.append([e.as_tuple() for e in pruned])
+            contexts.append(memory_context(decayed))
+            n_edges.append(len(pruned))
+
+        # Phase C — batched reasoning.
+        results = self.llm.reason_multi(tuples_list, contexts)
+
+        rows = []
+        for d, (prob, rationale), ne, dn in zip(dates, results, n_edges, day_news):
+            ts = datetime(d.year, d.month, d.day)
+            rows.append(Prediction(
+                timestamp=ts, crash_prob=prob,
+                label=int(prob >= self.label_threshold), rationale=rationale,
+                n_news=len(dn), n_edges=ne,
+            ))
+        return rows
+
     @staticmethod
     def _as_date(value) -> date:
         """Coerce a 'YYYY-MM-DD' string / datetime / date into a date."""
@@ -887,10 +1035,13 @@ class TRRPipeline:
             end_d = self._as_date(end)
             dates = [d for d in dates if d <= end_d]
 
-        rows: list[Prediction] = []
-        for step, day in enumerate(dates):
-            day_news = news_by_day.get(day, [])
-            rows.append(self._step(step, day_news, day))
+        if self.cross_batch:
+            rows = self._run_cross_batch(news_by_day, dates)
+        else:
+            rows = []
+            for step, day in enumerate(dates):
+                day_news = news_by_day.get(day, [])
+                rows.append(self._step(step, day_news, day))
 
         df = pd.DataFrame(
             {
@@ -1419,9 +1570,11 @@ def crash_labels(
 KAGGLE_WORKING = "/kaggle/working"
 SMOKE_OUT_DIR = "/tmp/trr_smoke_out"
 LOCAL_NEWS_CSV = "data/news_raw/oliviervha/cryptonews.csv"
-DEFAULT_START, DEFAULT_END = "2022-10-01", "2022-12-15"
+# Full window: the overlap of the news corpus (2021-10..2023-12) with the price
+# labels (from 2022-01) — covers LUNA (May 2022), 3AC, FTX (Nov 2022), and 2023.
+DEFAULT_START, DEFAULT_END = "2022-01-01", "2023-12-15"
 SMOKE_START, SMOKE_END = "2022-11-05", "2022-11-12"
-MAX_ITEMS_PER_DAY = 40
+MAX_ITEMS_PER_DAY = 24
 
 
 def _is_smoke():
@@ -1545,7 +1698,8 @@ def main():
         llm = HFReasoningLLM(model_path=model_dir, dtype=dtype)
 
     print(f"[kernel] window {start}..{end}  news_items={len(news)}", flush=True)
-    pipe = TRRPipeline(llm=llm, batch=True, max_items_per_day=MAX_ITEMS_PER_DAY, lam=0.6)
+    pipe = TRRPipeline(llm=llm, batch=True, cross_batch=True,
+                       max_items_per_day=MAX_ITEMS_PER_DAY, lam=0.6)
     pred = pipe.run(group_by_day(news), start=start, end=end)
     print(f"[kernel] predicted {len(pred)} days", flush=True)
 

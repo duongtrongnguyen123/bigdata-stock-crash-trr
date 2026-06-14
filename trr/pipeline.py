@@ -39,6 +39,7 @@ class TRRPipeline:
         mem_min_relevance: float = 0.5,
         batch: bool = False,
         max_items_per_day: int = 40,
+        cross_batch: bool = False,
     ) -> None:
         self.llm = llm if llm is not None else MockLLM()
         self.lam = lam
@@ -50,6 +51,11 @@ class TRRPipeline:
         # ~31k generations — the only feasible path on the GPU quota.
         self.batch = batch
         self.max_items_per_day = max_items_per_day
+        # cross_batch: batch the LLM calls ACROSS days (all brainstorm prompts in
+        # one batched pass, then all reason prompts) instead of day-by-day. Same
+        # results — the per-day memory/attention is still sequential — but the two
+        # LLM phases run as batched forwards, the big speedup for the full window.
+        self.cross_batch = cross_batch
         # Memory edges are carried into reasoning only while still salient; with
         # the exponential decay this lets a quiet day shed stale negatives so the
         # crash signal genuinely fades over time.
@@ -96,6 +102,45 @@ class TRRPipeline:
             n_edges=len(pruned),
         )
 
+    def _run_cross_batch(self, news_by_day: dict, dates: list) -> list:
+        """Phase-separated batched execution (same semantics as the per-day loop).
+
+        A: brainstorm ALL days in one batched LLM pass.
+        B: sequential memory update + decay + attention prune (no LLM) per day.
+        C: reason ALL days in one batched LLM pass.
+        """
+        day_news = [news_by_day.get(d, []) for d in dates]
+
+        # Phase A — batched brainstorming.
+        edges_per_day = self.llm.brainstorm_multi(
+            day_news, self.portfolio, max_items=self.max_items_per_day,
+        )
+
+        # Phase B — sequential memory/attention to build each day's reason input.
+        tuples_list, contexts, n_edges = [], [], []
+        for step, today_edges in enumerate(edges_per_day):
+            self.memory.update(today_edges, step)
+            decayed = self.memory.retrieve(step, self.lam)
+            salient = [e for e, r in decayed if r >= self.mem_min_relevance]
+            combined = today_edges + [e for e in salient if e not in today_edges]
+            pruned = pagerank_prune(combined, self.portfolio, top_k=self.top_k)
+            tuples_list.append([e.as_tuple() for e in pruned])
+            contexts.append(memory_context(decayed))
+            n_edges.append(len(pruned))
+
+        # Phase C — batched reasoning.
+        results = self.llm.reason_multi(tuples_list, contexts)
+
+        rows = []
+        for d, (prob, rationale), ne, dn in zip(dates, results, n_edges, day_news):
+            ts = datetime(d.year, d.month, d.day)
+            rows.append(Prediction(
+                timestamp=ts, crash_prob=prob,
+                label=int(prob >= self.label_threshold), rationale=rationale,
+                n_news=len(dn), n_edges=ne,
+            ))
+        return rows
+
     @staticmethod
     def _as_date(value) -> date:
         """Coerce a 'YYYY-MM-DD' string / datetime / date into a date."""
@@ -133,10 +178,13 @@ class TRRPipeline:
             end_d = self._as_date(end)
             dates = [d for d in dates if d <= end_d]
 
-        rows: list[Prediction] = []
-        for step, day in enumerate(dates):
-            day_news = news_by_day.get(day, [])
-            rows.append(self._step(step, day_news, day))
+        if self.cross_batch:
+            rows = self._run_cross_batch(news_by_day, dates)
+        else:
+            rows = []
+            for step, day in enumerate(dates):
+                day_news = news_by_day.get(day, [])
+                rows.append(self._step(step, day_news, day))
 
         df = pd.DataFrame(
             {

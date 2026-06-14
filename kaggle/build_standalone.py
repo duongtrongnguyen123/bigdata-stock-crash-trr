@@ -35,7 +35,7 @@ from datetime import date, datetime
 import numpy as np
 import pandas as pd
 
-BUILD_TAG = "standalone-v2-calib"
+BUILD_TAG = "standalone-v3-batch-full"
 
 
 class config:  # shim: only HISTORICAL_DIR is referenced by the inlined code
@@ -50,9 +50,11 @@ MAIN = '''
 KAGGLE_WORKING = "/kaggle/working"
 SMOKE_OUT_DIR = "/tmp/trr_smoke_out"
 LOCAL_NEWS_CSV = "data/news_raw/oliviervha/cryptonews.csv"
-DEFAULT_START, DEFAULT_END = "2022-10-01", "2022-12-15"
+# Full window: the overlap of the news corpus (2021-10..2023-12) with the price
+# labels (from 2022-01) — covers LUNA (May 2022), 3AC, FTX (Nov 2022), and 2023.
+DEFAULT_START, DEFAULT_END = "2022-01-01", "2023-12-15"
 SMOKE_START, SMOKE_END = "2022-11-05", "2022-11-12"
-MAX_ITEMS_PER_DAY = 40
+MAX_ITEMS_PER_DAY = 24
 
 
 def _is_smoke():
@@ -176,7 +178,8 @@ def main():
         llm = HFReasoningLLM(model_path=model_dir, dtype=dtype)
 
     print(f"[kernel] window {start}..{end}  news_items={len(news)}", flush=True)
-    pipe = TRRPipeline(llm=llm, batch=True, max_items_per_day=MAX_ITEMS_PER_DAY, lam=0.6)
+    pipe = TRRPipeline(llm=llm, batch=True, cross_batch=True,
+                       max_items_per_day=MAX_ITEMS_PER_DAY, lam=0.6)
     pred = pipe.run(group_by_day(news), start=start, end=end)
     print(f"[kernel] predicted {len(pred)} days", flush=True)
 
