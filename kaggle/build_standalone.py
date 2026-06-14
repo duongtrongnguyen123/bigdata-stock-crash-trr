@@ -35,7 +35,7 @@ from datetime import date, datetime
 import numpy as np
 import pandas as pd
 
-BUILD_TAG = "standalone-v3-batch-full"
+BUILD_TAG = "standalone-v4-32b-fewshot"
 
 
 class config:  # shim: only HISTORICAL_DIR is referenced by the inlined code
@@ -54,7 +54,11 @@ LOCAL_NEWS_CSV = "data/news_raw/oliviervha/cryptonews.csv"
 # labels (from 2022-01) — covers LUNA (May 2022), 3AC, FTX (Nov 2022), and 2023.
 DEFAULT_START, DEFAULT_END = "2022-01-01", "2023-12-15"
 SMOKE_START, SMOKE_END = "2022-11-05", "2022-11-12"
-MAX_ITEMS_PER_DAY = 24
+MAX_ITEMS_PER_DAY = 20
+# Qwen2.5-32B is ~65GB in bf16; use a smaller generation batch + bounded input
+# so KV cache fits alongside the weights on the 102GB card.
+GEN_BATCH_SIZE = 8
+MAX_INPUT_TOKENS = 2048
 
 
 def _is_smoke():
@@ -175,7 +179,8 @@ def main():
     else:
         model_dir = _find_model_dir()
         print(f"[kernel] model dir: {model_dir}", flush=True)
-        llm = HFReasoningLLM(model_path=model_dir, dtype=dtype)
+        llm = HFReasoningLLM(model_path=model_dir, dtype=dtype,
+                             batch_size=GEN_BATCH_SIZE, max_input_tokens=MAX_INPUT_TOKENS)
 
     print(f"[kernel] window {start}..{end}  news_items={len(news)}", flush=True)
     pipe = TRRPipeline(llm=llm, batch=True, cross_batch=True,

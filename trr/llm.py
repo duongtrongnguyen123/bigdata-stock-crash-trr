@@ -221,7 +221,25 @@ class ReasoningLLM(ABC):
             "insolvency spreading across multiple portfolio assets at once.\n"
             "- Distinguish a normal stream of negative chatter (LOW) from a sharp, "
             "broad escalation beyond the usual baseline (HIGH). Spread your "
-            "probabilities across the 0..1 range; do not anchor every day high.\n"
+            "probabilities across the 0..1 range; do not anchor every day to one "
+            "value.\n\n"
+            "FEW-SHOT EXAMPLES (learn the pattern; do not copy the numbers):\n"
+            "Example A — routine bearish chatter, NO crash:\n"
+            "  a few mild, scattered negative items (price dip commentary, one "
+            "regulator quote), no single shock hitting multiple assets at once\n"
+            "  -> {\"crash_prob\": 0.10, \"rationale\": \"ordinary negative noise; "
+            "no systemic or contagion signal\"}\n"
+            "Example B — broad escalation, ELEVATED:\n"
+            "  several negative impacts clustering the SAME day across BTC and ETH "
+            "(a large hack, a regulatory crackdown) but contained to a sub-sector\n"
+            "  -> {\"crash_prob\": 0.45, \"rationale\": \"notable stress but not yet "
+            "portfolio-wide contagion\"}\n"
+            "Example C — systemic contagion, CRASH imminent:\n"
+            "  dense same-day negatives — a major exchange/stablecoin insolvency "
+            "cascading to BTC, ETH and SOL together with liquidation language\n"
+            "  -> {\"crash_prob\": 0.88, \"rationale\": \"simultaneous portfolio-wide "
+            "failure; classic contagion cascade\"}\n\n"
+            "Now assess TODAY from the tuples above.\n"
             "Return ONLY JSON: {\"crash_prob\": 0..1, \"rationale\": \"...\"}.\n"
         )
 
@@ -260,7 +278,7 @@ class ReasoningLLM(ABC):
 
     def brainstorm_multi(self, day_items_list: list[list[NewsItem]],
                         candidate_assets: list[str], max_items: int = 40,
-                        max_new_tokens: int = 512) -> list[list[ImpactEdge]]:
+                        max_new_tokens: int = 768) -> list[list[ImpactEdge]]:
         """Batched Brainstorming: one prompt per day, all generated together."""
         capped = [items[:max_items] for items in day_items_list]
         prompts = [self._impact_batch_prompt(items, candidate_assets) for items in capped]
@@ -366,12 +384,14 @@ class HFReasoningLLM(ReasoningLLM):
     """
 
     def __init__(self, model_path: str, dtype: str = "bfloat16",
-                 device: str = "cuda", max_input_tokens: int = 4096) -> None:
+                 device: str = "cuda", max_input_tokens: int = 4096,
+                 batch_size: int = 24) -> None:
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
         self._torch = torch
         self.max_input_tokens = max_input_tokens
+        self.batch_size = batch_size  # smaller for larger models (VRAM)
         # Nemotron ships custom modeling code (model_type "nemotron_h"); it must
         # be trusted to load. The kernel runs non-interactively, so confirm here.
         self.tokenizer = AutoTokenizer.from_pretrained(
@@ -422,10 +442,11 @@ class HFReasoningLLM(ReasoningLLM):
         return self.tokenizer.decode(gen, skip_special_tokens=True)
 
     def generate_batch(self, prompts: list[str], max_new_tokens: int = 512,
-                       temperature: float = 0.0, batch_size: int = 24) -> list[str]:
+                       temperature: float = 0.0, batch_size: int = None) -> list[str]:
         """True batched generation with left padding, chunked to bound VRAM."""
         torch = self._torch
         tok = self.tokenizer
+        batch_size = batch_size or self.batch_size
         if tok.pad_token is None:
             tok.pad_token = tok.eos_token
         results: list[str] = []

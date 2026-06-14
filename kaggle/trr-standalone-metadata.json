@@ -18,6 +18,6 @@
   ],
   "kernel_sources": [],
   "model_sources": [
-    "qwen-lm/qwen2.5/transformers/14b-instruct/1"
+    "qwen-lm/qwen2.5/transformers/32b-instruct/1"
   ]
 }
