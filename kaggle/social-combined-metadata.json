@@ -1,0 +1,11 @@
+{
+  "id": "nguyenduongtrong/crypto-trr-social-combined",
+  "title": "Crypto TRR Social combined",
+  "code_file": "social_combined_32b.py",
+  "language": "python", "kernel_type": "script",
+  "is_private": true, "enable_gpu": true, "enable_internet": false,
+  "machine_shape": "NvidiaRtxPro6000",
+  "competition_sources": ["nvidia-nemotron-model-reasoning-challenge"],
+  "dataset_sources": ["nguyenduongtrong/crypto-trr-bundle", "nguyenduongtrong/crypto-social-combined"],
+  "kernel_sources": [], "model_sources": ["qwen-lm/qwen2.5/transformers/32b-instruct/1"]
+}
