@@ -1,0 +1,12 @@
+{
+  "id": "nguyenduongtrong/crypto-trr-2024-14b",
+  "title": "Crypto TRR 2024 14b",
+  "code_file": "exp2024_14b.py",
+  "language": "python", "kernel_type": "script",
+  "is_private": true, "enable_gpu": true, "enable_internet": false,
+  "machine_shape": "NvidiaRtxPro6000",
+  "competition_sources": ["nvidia-nemotron-model-reasoning-challenge"],
+  "dataset_sources": ["nguyenduongtrong/crypto-trr-bundle", "nguyenduongtrong/crypto-news-2024"],
+  "kernel_sources": [],
+  "model_sources": ["qwen-lm/qwen2.5/transformers/14b-instruct/1"]
+}
