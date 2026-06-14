@@ -39,11 +39,17 @@ def extract_json(text: str):
     # Try fenced block first.
     fence = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL)
     candidate = fence.group(1) if fence else text
-    # Find the first balanced { } or [ ] span.
-    for opener, closer in (("{", "}"), ("[", "]")):
-        start = candidate.find(opener)
-        if start == -1:
-            continue
+    # Parse the balanced span of whichever bracket appears FIRST — so a JSON
+    # array "[{...},{...}]" is read as the array, not just its first object.
+    pos_obj = candidate.find("{")
+    pos_arr = candidate.find("[")
+    spans = []
+    if pos_arr != -1:
+        spans.append((pos_arr, "[", "]"))
+    if pos_obj != -1:
+        spans.append((pos_obj, "{", "}"))
+    spans.sort()
+    for start, opener, closer in spans:
         depth = 0
         for i in range(start, len(candidate)):
             if candidate[i] == opener:

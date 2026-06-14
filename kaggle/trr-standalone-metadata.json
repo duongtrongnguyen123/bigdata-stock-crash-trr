@@ -1,0 +1,23 @@
+{
+  "id": "nguyenduongtrong/crypto-trr-qwen",
+  "title": "Crypto TRR Qwen",
+  "code_file": "trr_standalone.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "machine_shape": "NvidiaRtxPro6000",
+  "competition_sources": [
+    "nvidia-nemotron-model-reasoning-challenge"
+  ],
+  "dataset_sources": [
+    "nguyenduongtrong/crypto-trr-bundle",
+    "oliviervha/crypto-news"
+  ],
+  "kernel_sources": [],
+  "model_sources": [
+    "qwen-lm/qwen2.5/transformers/14b-instruct/1"
+  ]
+}
