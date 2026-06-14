@@ -63,6 +63,24 @@ synthetic demo corpus (`trr/sample_news.jsonl`, aligned to the real crash
 windows) — point `trr.news.load_news` at a real Kaggle crypto-news dataset for
 the full run.
 
+### Results (full study in [`reports/RESULTS_TRR.md`](reports/RESULTS_TRR.md))
+
+Real GPU runs (Qwen2.5-14B/32B on Kaggle RTX 6000 Pro) over 2022–2024 crypto news:
+
+| Setup | AUROC |
+|---|---:|
+| Zero-shot (no few-shot) | 0.505 (chance) |
+| **News reasoning, 32B few-shot (2022–23)** | **0.566** |
+| News reasoning, 32B few-shot (2024, new regime) | 0.580 |
+| News reasoning, 14B (2024) | 0.376 (not robust) |
+| **+ Fear & Greed sentiment ensemble** | **0.653** |
+| Social-post (Reddit) reasoning | 0.475–0.489 (no help) |
+
+**Findings:** few-shot is the key lever (0.50→0.57); news reasoning generalizes
+across regimes *at 32B scale* but not 14B; aggregate sentiment helps (though
+regime-dependent); reasoning over noisy social posts does not. All beat the
+price/lexicon/base-rate baselines (≤0.55).
+
 ---
 
 ## Supporting infrastructure — real-time volatility pipeline
