@@ -169,6 +169,39 @@ precision@K shows the signal concentrates.
 
 Run it: `python -m trr.analysis` (writes `reports/analysis_*.json` + `reports/backtest_equity.png`).
 
+## Per-asset crash prediction
+
+Beyond the portfolio, we asked the LLM for a crash probability **per asset**
+(`reason_multi_per_asset`), labelled against each asset's own forward-3-day
+−12% drawdown, scored per asset with bootstrap CIs (`make trr-analyze` →
+`run_per_asset`).
+
+| asset | crashes | 14B AUROC | 32B AUROC | 32B 95% CI |
+|---|---:|---:|---:|---|
+| BTC | 16 | 0.493 | **0.690** | [0.545, 0.817] |
+| ETH | 30 | 0.527 | **0.639** | [0.526, 0.744] |
+| SOL | 66 | 0.505 | 0.544 | [0.469, 0.622] |
+| BNB | 18 | 0.494 | 0.583 | [0.436, 0.724] |
+| AVAX | 69 | 0.480 | 0.557 | [0.486, 0.629] |
+| DOGE | 31 | 0.461 | 0.550 | [0.454, 0.648] |
+| **macro** | | **0.493** | **0.594** | |
+
+**Findings:**
+1. **Per-asset works only at scale.** 14B is at chance across the board (macro
+   0.493); 32B reaches macro **0.594**, with **BTC (0.690) and ETH (0.639)
+   significantly above 0.5** (lower CI > 0.5) despite few events.
+2. **The majors are the most predictable** — they get the most news coverage and
+   drive market narratives; small alts (SOL/AVAX/DOGE ≈ 0.55) are weaker.
+3. **Capability × granularity interaction** (the non-obvious result):
+   - **Weak model (14B):** portfolio (0.560) ≫ per-asset (0.493) — aggregating
+     *helps*, averaging out idiosyncratic noise it can't reason about.
+   - **Strong model (32B):** per-asset macro (0.594) **>** portfolio (0.566) — a
+     capable model extracts *more* signal reasoning per-asset than from the
+     aggregate.
+
+Caveat: BTC/BNB have only 16–18 crash events, so those CIs are wide; the macro
+average and the BTC/ETH lower-CI-above-0.5 are the defensible claims.
+
 ## Reproduce
 ```bash
 # Offline LLM runs (Kaggle RTX 6000 Pro): kaggle/trr_standalone.py + deploy_trr.sh

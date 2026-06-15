@@ -245,7 +245,46 @@ def run(pred_csv: str = "kaggle/out_v4/trr_predictions.csv", label: str = "v4 (3
     return result
 
 
+def run_per_asset(pred_csv: str, threshold: float = 0.12):
+    """Per-asset AUROC: each asset's crash_prob_{T} vs that asset's crash label."""
+    from trr.labels import asset_crash_labels
+    from trr.schema import PORTFOLIO
+
+    pred = pd.read_csv(pred_csv, index_col=0)
+    pred.index = pd.to_datetime(pred.index).date
+    lab = asset_crash_labels(threshold=threshold)
+    lab.index = pd.to_datetime(lab.index).date
+
+    print(f"=== Per-asset crash prediction ({len(pred)} days, threshold {threshold:.0%}/3d) ===")
+    print(f"    {'asset':6s} {'crashes':>8s} {'base':>6s} {'AUROC':>7s}  95% CI")
+    rows, aurocs = [], []
+    for a in PORTFOLIO:
+        col = f"crash_prob_{a}"
+        if col not in pred.columns:
+            continue
+        y = np.array([int(lab.get(f"{a}_crash", pd.Series()).get(d, 0)) for d in pred.index])
+        if y.sum() < 3 or y.sum() == len(y):
+            print(f"    {a:6s} {int(y.sum()):>8d}  (too few positives — skipped)")
+            continue
+        b, lo, hi = bootstrap_auroc(y, pred[col].values)
+        aurocs.append(b)
+        print(f"    {a:6s} {int(y.sum()):>8d} {y.mean():>6.1%} {b:>7.3f}  [{lo:.3f}, {hi:.3f}]")
+        rows.append({"asset": a, "crashes": int(y.sum()), "base_rate": float(y.mean()),
+                     "auroc": b, "ci": [lo, hi]})
+    if aurocs:
+        print(f"    {'MACRO':6s} {'':>8s} {'':>6s} {np.mean(aurocs):>7.3f}  (avg across assets)")
+    os.makedirs(OUT_DIR, exist_ok=True)
+    json.dump({"threshold": threshold, "per_asset": rows,
+               "macro_auroc": float(np.mean(aurocs)) if aurocs else None},
+              open(f"{OUT_DIR}/analysis_per_asset.json", "w"), indent=2)
+    return rows
+
+
 if __name__ == "__main__":
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "per-asset":
+        run_per_asset(sys.argv[2] if len(sys.argv) > 2 else "kaggle/out_perasset/trr_predictions.csv")
+        raise SystemExit
     run("kaggle/out_v4/trr_predictions.csv", "v4 (32B, 2022-23)")
     if os.path.exists("kaggle/out_2024_32b/trr_predictions.csv"):
         print("\n" + "=" * 60)
