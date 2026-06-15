@@ -300,6 +300,48 @@ class ReasoningLLM(ABC):
             out.append((max(0.0, min(1.0, prob)), str(data.get("rationale", ""))))
         return out
 
+    def reason_multi_per_asset(self, tuples_list: list[list[tuple]], contexts: list[str],
+                              assets: list[str], max_new_tokens: int = 320) -> list[dict]:
+        """Batched per-asset Reasoning: one crash probability PER portfolio asset."""
+        prompts = [self._reason_prompt_per_asset(t, c, assets)
+                   for t, c in zip(tuples_list, contexts)]
+        raws = self.generate_batch(prompts, max_new_tokens=max_new_tokens)
+        out: list[dict] = []
+        for raw in raws:
+            data = extract_json(raw) or {}
+            d = {}
+            for a in assets:
+                v = data.get(a, data.get(a.upper(), data.get(a.lower(), 0.0)))
+                try:
+                    d[a] = max(0.0, min(1.0, float(v)))
+                except (TypeError, ValueError):
+                    d[a] = 0.0
+            out.append(d)
+        return out
+
+    @staticmethod
+    def _reason_prompt_per_asset(tuples: list[tuple], context: str,
+                                assets: list[str]) -> str:
+        lines = "\n".join(
+            f"  ({t[0]:%Y-%m-%d}, {t[1]}, {'+' if t[2] >= 0 else '-'}, {t[3]})"
+            for t in tuples
+        )
+        keys = ", ".join(f'"{a}": 0..1' for a in assets)
+        return (
+            "You are forecasting, for EACH crypto asset, the probability it "
+            "CRASHES (drops >12% over the next 3 days), from a graph of dated, "
+            "directed news-impact relations (time, subject, polarity, object).\n"
+            f"{context}\n"
+            f"Impact tuples:\n{lines}\n\n"
+            "Reason per asset: an asset's risk rises with negative impacts "
+            "directed AT it AND with broad market contagion. Most days are calm "
+            "for most assets (base rate ~5-10%), so default LOW; assign high "
+            "probability only to assets under specific, escalating stress. "
+            "Different assets can have very different probabilities.\n"
+            f"Return ONLY JSON mapping each ticker to its crash probability: "
+            f"{{{keys}}}.\n"
+        )
+
 
 class MockLLM(ReasoningLLM):
     """Deterministic heuristic backend for offline pipeline testing.
@@ -373,6 +415,18 @@ class MockLLM(ReasoningLLM):
 
     def reason_multi(self, tuples_list, contexts, max_new_tokens=256):
         return [self.predict_crash(t, c) for t, c in zip(tuples_list, contexts)]
+
+    def reason_multi_per_asset(self, tuples_list, contexts, assets, max_new_tokens=320):
+        out = []
+        for tuples in tuples_list:
+            d = {}
+            for a in assets:
+                at = [t for t in tuples if t[3] == a]
+                neg = sum(1 for t in at if t[2] < 0)
+                d[a] = (max(0.0, min(1.0, 0.1 + 0.7 * (neg / max(len(at), 1))
+                                     + 0.02 * min(neg, 10))) if at else 0.1)
+            out.append(d)
+        return out
 
 
 class HFReasoningLLM(ReasoningLLM):

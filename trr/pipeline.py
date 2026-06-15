@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
+import numpy as np
 import pandas as pd
 
 from trr.attention import pagerank_prune
@@ -40,6 +41,7 @@ class TRRPipeline:
         batch: bool = False,
         max_items_per_day: int = 40,
         cross_batch: bool = False,
+        per_asset: bool = False,
     ) -> None:
         self.llm = llm if llm is not None else MockLLM()
         self.lam = lam
@@ -56,6 +58,8 @@ class TRRPipeline:
         # results — the per-day memory/attention is still sequential — but the two
         # LLM phases run as batched forwards, the big speedup for the full window.
         self.cross_batch = cross_batch
+        # per_asset: emit a crash probability per portfolio asset (cross_batch).
+        self.per_asset = per_asset
         # Memory edges are carried into reasoning only while still salient; with
         # the exponential decay this lets a quiet day shed stale negatives so the
         # crash signal genuinely fades over time.
@@ -129,8 +133,21 @@ class TRRPipeline:
             n_edges.append(len(pruned))
 
         # Phase C — batched reasoning.
-        results = self.llm.reason_multi(tuples_list, contexts)
+        if self.per_asset:
+            per = self.llm.reason_multi_per_asset(tuples_list, contexts, self.portfolio)
+            rows = []
+            for d, probs, ne, dn in zip(dates, per, n_edges, day_news):
+                ts = datetime(d.year, d.month, d.day)
+                # Portfolio-level proxy = mean of the per-asset probabilities.
+                pf = float(np.mean(list(probs.values()))) if probs else 0.0
+                rows.append(Prediction(
+                    timestamp=ts, crash_prob=pf,
+                    label=int(pf >= self.label_threshold), rationale="",
+                    n_news=len(dn), n_edges=ne, per_asset_direction=dict(probs),
+                ))
+            return rows
 
+        results = self.llm.reason_multi(tuples_list, contexts)
         rows = []
         for d, (prob, rationale), ne, dn in zip(dates, results, n_edges, day_news):
             ts = datetime(d.year, d.month, d.day)
@@ -196,6 +213,12 @@ class TRRPipeline:
             },
             index=pd.Index(list(dates), name="day"),
         )
+        # Per-asset mode: add one crash-probability column per portfolio asset.
+        if self.per_asset:
+            for ticker in self.portfolio:
+                df[f"crash_prob_{ticker}"] = [
+                    p.per_asset_direction.get(ticker, 0.0) for p in rows
+                ]
         return df
 
 

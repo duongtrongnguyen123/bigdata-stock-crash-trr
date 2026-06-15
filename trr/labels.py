@@ -52,6 +52,28 @@ def build_portfolio(hist_dir: str = None) -> pd.DataFrame:
     return out
 
 
+def asset_crash_labels(
+    hist_dir: str = None,
+    threshold: float = 0.15,
+    horizon: int = DEFAULT_HORIZON,
+) -> pd.DataFrame:
+    """Per-asset crash labels: for each PORTFOLIO ticker, 1 if that asset's
+    forward `horizon`-day low breaches `-threshold`. Single assets are far more
+    volatile than the diversified portfolio, so the threshold is larger (default
+    15%) to keep "crash" rare. Returns a frame indexed by day with one
+    `{TICKER}_crash` column per asset.
+    """
+    hist_dir = hist_dir or config.HISTORICAL_DIR
+    out = {}
+    for ticker in PORTFOLIO:
+        lvl = _load_daily_close(SYMBOLS[ticker], hist_dir)
+        fwd_low = lvl.iloc[::-1].rolling(horizon, min_periods=1).min().iloc[::-1].shift(-1)
+        fwd_ret = fwd_low / lvl - 1.0
+        out[f"{ticker}_crash"] = (fwd_ret <= -threshold).astype(float)
+    df = pd.DataFrame(out).dropna()
+    return df.astype(int)
+
+
 def crash_labels(
     hist_dir: str = None,
     threshold: float = DEFAULT_THRESHOLD,

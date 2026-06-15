@@ -61,6 +61,7 @@ GEN_BATCH_SIZE = 8
 MAX_INPUT_TOKENS = 2048
 LAM = 0.6
 TOP_K = 30
+PER_ASSET = False
 
 
 def _is_smoke():
@@ -186,7 +187,8 @@ def main():
 
     print(f"[kernel] window {start}..{end}  news_items={len(news)}", flush=True)
     pipe = TRRPipeline(llm=llm, batch=True, cross_batch=True,
-                       max_items_per_day=MAX_ITEMS_PER_DAY, lam=LAM, top_k=TOP_K)
+                       max_items_per_day=MAX_ITEMS_PER_DAY, lam=LAM, top_k=TOP_K,
+                       per_asset=PER_ASSET)
     pred = pipe.run(group_by_day(news), start=start, end=end)
     print(f"[kernel] predicted {len(pred)} days", flush=True)
 

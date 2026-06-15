@@ -22,7 +22,7 @@ from datetime import date, datetime
 import numpy as np
 import pandas as pd
 
-BUILD_TAG = "standalone-v4-32b-fewshot"
+BUILD_TAG = "perasset-32b"
 
 
 class config:  # shim: only HISTORICAL_DIR is referenced by the inlined code
@@ -1701,7 +1701,7 @@ GEN_BATCH_SIZE = 8
 MAX_INPUT_TOKENS = 2048
 LAM = 0.6
 TOP_K = 30
-PER_ASSET = False
+PER_ASSET = True
 
 
 def _is_smoke():
