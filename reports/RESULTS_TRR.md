@@ -277,15 +277,23 @@ Test-time compute scaling: 3 sampled reasoning traces per day, averaged.
 - **Fair re-run** (brainstorm budget raised to 2048 → edges flow again at
   **11.9/day**): **AUROC 0.544 vs 0.524** for the Qwen-32B greedy reference — a
   small but *positive* edge. So when given enough budget, reasoning + sampled
-  self-consistency is the **one advanced technique that doesn't hurt** (modest
-  +0.02). Caveat: this still confounds model (R1 vs Qwen) with method; a clean
-  same-model K-sweep is the isolating test.
+  self-consistency appeared to help by +0.02 — but that confounds model with
+  method.
+- **Clean isolation (Qwen-32B fixed, vary only K, 2022):** K=1 **0.524** → K=3
+  **0.531** → K=5 **0.508** — *flat, within ±0.01 noise*. So **test-time compute
+  / self-consistency does not reliably help** once the model is held fixed; the
+  earlier +0.02 was the R1 model (or noise), not the sampling method.
 
 ### Bottom line on advanced techniques
-The two *learned* approaches — stacking and the GNN — **underperformed** the
-straightforward recipe (capable *instruct* model + few-shot + fixed sentiment
-blend + isotonic calibration + de-risking backtest). **Self-consistency** (given
-a fair token budget) was the lone advanced method to *slightly help* (+0.02). The lessons are consistent and honest: at ≤76 crash
+All three advanced approaches **failed to beat the straightforward recipe**
+(capable *instruct* model + few-shot + fixed sentiment blend + isotonic
+calibration + de-risking backtest): stacking and the GNN *underperformed*
+(learned heads overfit under non-stationarity + few events), and a clean
+same-model K-sweep showed **self-consistency gives no reliable gain** (0.524 →
+0.531 → 0.508). The consistent, well-tested thesis: **at ≤76 crash events with
+regime non-stationarity, added model capacity and test-time compute do not help;
+the durable wins are the LLM's zero-shot reasoning, a fixed sentiment blend,
+calibration, and the risk-reducing de-risk strategy.** The lessons are consistent and honest: at ≤76 crash
 events with regime non-stationarity, **added model capacity (learned heads, graph
 nets) overfits, and reasoning-model test-time compute is wasted on extraction.**
 Simplicity and calibration win.
