@@ -173,6 +173,40 @@ def backtest(df: pd.DataFrame, threshold: float = None):
 
 
 # --------------------------------------------------------------------------- #
+def cost_aware_backtest(df: pd.DataFrame, cost_bps: float = 10.0, lookback: int = 60):
+    """Continuous-sizing, transaction-cost-aware backtest (fully causal).
+
+    Exposure e[t] = 1 - (causal trailing-percentile rank of crash_prob[t] over
+    the last `lookback` days) — scale out of the market as today's crash risk is
+    high relative to its recent history. Return realized t+1; turnover charged at
+    `cost_bps`. No lookahead, no fitted calibration.
+    """
+    p = df["crash_prob"].to_numpy()
+    fwd = np.append(df["port_ret"].to_numpy()[1:], 0.0)  # r[t+1]
+    n = len(p)
+    expo = np.ones(n)
+    for t in range(n):
+        lo = max(0, t - lookback)
+        window = p[lo : t + 1]
+        rank = (window < p[t]).mean()           # causal percentile of today
+        expo[t] = 1.0 - rank
+    cost = cost_bps / 1e4
+    turnover = np.abs(np.diff(np.concatenate([[1.0], expo])))
+    strat = expo * fwd - cost * turnover
+    bh = fwd
+
+    def stats(r):
+        eq = np.cumprod(1 + r)
+        sharpe = (r.mean() / (r.std() + 1e-12)) * np.sqrt(365)
+        mdd = ((eq - np.maximum.accumulate(eq)) / np.maximum.accumulate(eq)).min()
+        return {"total_return": float(eq[-1] - 1), "sharpe": float(sharpe),
+                "max_drawdown": float(mdd)}
+
+    return {"cost_bps": cost_bps, "avg_exposure": float(expo.mean()),
+            "turnover_per_day": float(turnover.mean()),
+            "strategy_net": stats(strat), "buy_hold": stats(bh)}
+
+
 def _plots(df, bt, out_dir):
     try:
         import matplotlib

@@ -154,8 +154,25 @@ buy-and-hold. See `reports/backtest_equity.png`.
 | 2024 (bull) | buy & hold | +22.1% | 0.72 | −40.7% |
 | 2024 (bull) | **TRR de-risk** | **+31.5%** | **0.92** | **−32.5%** |
 
-**Heeding the crash signal beats buy-and-hold on both return and drawdown in
-both regimes** — turning a −39% bear-market loss into +4%, and improving the
+**Cost-aware refinement** (`cost_aware_backtest`, continuous sizing
+`e=1−causal-percentile(crash_prob)`, turnover charged):
+
+| regime | cost | strat return | Sharpe | maxDD | (buy&hold) |
+|---|---|---:|---:|---:|---|
+| 2022–23 | 0 bps | +7.6% | 0.31 | −49.6% | −39.3% / −75.4% |
+| 2022–23 | 10 bps | −5.5% | 0.17 | −52.6% | −39.3% / −75.4% |
+| 2024 | 10 bps | +12.3% | 0.56 | −28.1% | +22.1% / −40.7% |
+
+The **drawdown reduction is robust and survives costs in both regimes** (−50% vs
+−75% bear; −28% vs −41% bull). Absolute outperformance survives realistic 10 bps
+costs in the bear market but the *continuous* sizing turns over ~0.18/day, so it
+is cost-sensitive — the **lower-turnover binary de-risk below is the more
+practical variant**, and in the bull market de-risking trades some upside for a
+much smaller drawdown. Honest takeaway: the signal's durable economic value is
+**risk reduction**, not raw return.
+
+The simpler binary version: **heeding the crash signal beats buy-and-hold on both
+return and drawdown in both regimes** — turning a −39% bear-market loss into +4%, and improving the
 bull year too (and out-of-regime, where AUROC significance is weak). **Economic
 value is the most robust finding** — more so than the AUROC, because a strategy
 only needs the few biggest crashes called right, which is exactly where
