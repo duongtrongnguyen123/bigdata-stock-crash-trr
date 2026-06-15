@@ -252,19 +252,23 @@ training data*. At this scale (≤76 crash events) and with regime shift,
 zero-shot reasoning, (b) a *fixed* sentiment blend, (c) isotonic **calibration**,
 and (d) the economic de-risking strategy — not from training a model on top.
 ### Self-consistency with a reasoning model (DeepSeek-R1-Distill-Qwen-32B, K=3)
-Test-time compute scaling: 3 sampled reasoning traces per day, averaged. On 2022
-it scored **AUROC 0.508 (chance)** vs the Qwen-32B greedy reference (0.524).
-Cause: `n_edges` collapsed to **0.3/day** (vs ~10–12 for Qwen) — the R1 model
-spends its token budget on `<think>` traces during the *brainstorm* extraction
-and never emits the JSON, starving the reason step. **Reasoning models are
-counterproductive for the mechanical extraction phase**; they'd need a separate
-non-reasoning extractor (or a much larger token budget) to be usable here.
+Test-time compute scaling: 3 sampled reasoning traces per day, averaged.
+- **First attempt failed (AUROC 0.508)** because R1's `<think>` traces ate the
+  1024-token *brainstorm* budget before emitting the edge JSON → `n_edges`
+  collapsed to **0.3/day**. Lesson: reasoning models are wasteful on the
+  mechanical extraction phase.
+- **Fair re-run** (brainstorm budget raised to 2048 → edges flow again at
+  **11.9/day**): **AUROC 0.544 vs 0.524** for the Qwen-32B greedy reference — a
+  small but *positive* edge. So when given enough budget, reasoning + sampled
+  self-consistency is the **one advanced technique that doesn't hurt** (modest
+  +0.02). Caveat: this still confounds model (R1 vs Qwen) with method; a clean
+  same-model K-sweep is the isolating test.
 
 ### Bottom line on advanced techniques
-All three "harder" approaches — stacking, GNN, and reasoning-model
-self-consistency — **failed to beat the straightforward recipe** (capable
-*instruct* model + few-shot + fixed sentiment blend + isotonic calibration +
-the de-risking backtest). The lessons are consistent and honest: at ≤76 crash
+The two *learned* approaches — stacking and the GNN — **underperformed** the
+straightforward recipe (capable *instruct* model + few-shot + fixed sentiment
+blend + isotonic calibration + de-risking backtest). **Self-consistency** (given
+a fair token budget) was the lone advanced method to *slightly help* (+0.02). The lessons are consistent and honest: at ≤76 crash
 events with regime non-stationarity, **added model capacity (learned heads, graph
 nets) overfits, and reasoning-model test-time compute is wasted on extraction.**
 Simplicity and calibration win.
