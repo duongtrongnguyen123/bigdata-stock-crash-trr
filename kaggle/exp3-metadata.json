@@ -1,12 +1,22 @@
 {
-  "id": "nguyenduongtrong/crypto-trr-exp3",
+  "id": "zhongzhing/crypto-trr-exp3",
   "title": "Crypto TRR Exp3",
   "code_file": "exp3_14b.py",
-  "language": "python", "kernel_type": "script",
-  "is_private": true, "enable_gpu": true, "enable_internet": false,
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": false,
   "machine_shape": "NvidiaRtxPro6000",
-  "competition_sources": ["nvidia-nemotron-model-reasoning-challenge"],
-  "dataset_sources": ["nguyenduongtrong/crypto-trr-bundle", "oliviervha/crypto-news"],
+  "competition_sources": [
+    "nvidia-nemotron-model-reasoning-challenge"
+  ],
+  "dataset_sources": [
+    "zhongzhing/crypto-portfolio-prices",
+    "oliviervha/crypto-news"
+  ],
   "kernel_sources": [],
-  "model_sources": ["qwen-lm/qwen2.5/transformers/14b-instruct/1"]
+  "model_sources": [
+    "qwen-lm/qwen2.5/transformers/14b-instruct/1"
+  ]
 }
