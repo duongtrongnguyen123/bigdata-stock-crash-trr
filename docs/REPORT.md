@@ -7,6 +7,28 @@ numbers are invented. The system architecture is documented in
 
 ---
 
+## Results at a glance
+
+| Result | Value |
+|---|---|
+| Stock **COVID** crash detection (AUROC) | **0.785** → **0.847** with RAG |
+| Stock **2016–2020** broad backtest (pooled) | 0.710 (news-volume 0.747 wins on calm windows) |
+| Crypto **2022–23** | 0.530 → 0.542 with RAG |
+| FNSPID **2021–23 bear market** | 0.550 (beats news-volume 0.491) |
+| Does training help? (within-source) | ensemble **+0.03–0.08** over technicals — LLM adds value |
+| **Economic backtest** (de-risk overlay) | **+205% / −45% maxDD / 0.97 Sharpe** vs buy&hold +161% / −50% / 0.80 |
+| Calibration | Brier **0.139 → 0.073** (isotonic) |
+| Alerting | **P@10 = 0.20 (3.2× base rate)** |
+| Direction / raw price | ~chance (weak-form EMH) — tail-risk is the feasible target |
+
+**One-line thesis:** a zero-shot LLM reasoning over news is a *real but
+weak-to-moderate* crash detector — best on concentrated panics, beaten by a
+volume baseline on calm windows, adding genuine value over price technicals when
+evaluated fairly, and **economically useful as a risk overlay** — while raw
+price/direction stays infeasible by construction.
+
+---
+
 ## Abstract
 
 We study whether a Large Language Model can predict equity and crypto market
