@@ -256,3 +256,37 @@ def test_predict_ensemble_endpoint():
     assert "ensemble_available" in d
     if d["ensemble_available"]:
         assert "technicals_asof" in d and "ensemble_crash_prob" in d
+
+
+def test_predict_ensemble_degrades_without_model(monkeypatch):
+    """/predict-ensemble must still return a valid crash_prob if the meta-model
+    artifact is unavailable (ensemble_available=False, falls back to LLM prob)."""
+    import serving.ensemble as ens
+    monkeypatch.setattr(ens, "_CACHE", {"model": None}, raising=False)
+    client = _client()
+    r = client.post("/predict-ensemble", json={"headlines": [
+        {"title": "exchange hacked, liquidations cascade", "assets": ["BTC"]}]})
+    assert r.status_code == 200
+    d = r.json()
+    assert d["ensemble_available"] is False
+    assert 0.0 <= d["crash_prob"] <= 1.0
+    assert d["crash_prob"] == d["llm_crash_prob"]  # falls back to raw LLM
+
+
+def test_predict_garbled_inputs():
+    """Headlines missing optional fields / empty titles must not crash."""
+    client = _client()
+    r = client.post("/predict", json={"headlines": [
+        {"title": ""},                       # empty title, no assets
+        {"title": "BTC up", "assets": []},   # empty assets
+    ]})
+    assert r.status_code == 200
+    d = r.json()
+    assert 0.0 <= d["crash_prob"] <= 1.0
+
+
+def test_predict_empty_headlines():
+    client = _client()
+    r = client.post("/predict", json={"headlines": []})
+    assert r.status_code == 200
+    assert r.json()["crash_prob"] == 0.0
