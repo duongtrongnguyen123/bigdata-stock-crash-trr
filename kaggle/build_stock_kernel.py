@@ -16,6 +16,7 @@ from build_standalone import HEADER, MODULES, strip_module  # reuse the inliner
 
 # prices.py is appended after labels.py so crash_labels_daily/direction_labels_daily
 # are inlined too.
+# MODULES already ends with "rag"; just add the equities daily-price loader.
 STOCK_MODULES = MODULES + ["prices"]
 
 STOCK_MAIN = '''
@@ -31,6 +32,9 @@ DEFAULT_START, DEFAULT_END = "2019-06-03", "2020-06-10"
 SMOKE_START, SMOKE_END = "2020-02-20", "2020-03-20"
 # Both targets run in one GPU session (model load is the cost) unless overridden.
 TARGET_MODES = os.environ.get("TARGET_MODES", "crash,direction").split(",")
+USE_RAG = os.environ.get("USE_RAG", "0") == "1"  # case-based few-shot retrieval
+RAG_EMBARGO = 5  # >= label horizon (3) so an analogue never overlaps the query
+RAG_K = 5
 MAX_ITEMS_PER_DAY = 20
 GEN_BATCH_SIZE = 8
 MAX_INPUT_TOKENS = 2048
@@ -167,11 +171,21 @@ def main():
         tmode = tmode.strip()
         if not tmode:
             continue
-        print(f"[kernel] === running target={tmode} ===", flush=True)
+        print(f"[kernel] === running target={tmode} (RAG={USE_RAG}) ===", flush=True)
+        rag, rag_labels = None, None
+        if USE_RAG:
+            if tmode == "direction":
+                lab = direction_labels_daily(price_dir, STOCK_TICKERS); col = "up"
+            else:
+                lab = crash_labels_daily(price_dir, STOCK_TICKERS); col = "crash"
+            s = lab[col].copy(); s.index = pd.to_datetime(s.index).date
+            rag_labels = {d: int(s.get(d, 0)) for d in by_day}
+            rag = CausalRAG(embargo=RAG_EMBARGO, k=RAG_K)
         pipe = TRRPipeline(llm=llm, portfolio=STOCK_TICKERS, target_mode=tmode,
                            batch=True, cross_batch=True, max_items_per_day=MAX_ITEMS_PER_DAY,
                            lam=LAM, top_k=TOP_K, reason_max_new_tokens=REASON_MAXTOK,
-                           brainstorm_max_new_tokens=BRAINSTORM_MAXTOK)
+                           brainstorm_max_new_tokens=BRAINSTORM_MAXTOK,
+                           rag=rag, rag_labels=rag_labels)
         pred = pipe.run(by_day, start=start, end=end)
         print(f"[kernel] target={tmode} predicted {len(pred)} days", flush=True)
         mode_dir = os.path.join(out_dir, tmode)

@@ -23,6 +23,7 @@ from trr.attention import pagerank_prune
 from trr.brainstorm import build_impact_graph
 from trr.llm import MockLLM, ReasoningLLM
 from trr.memory import DecayMemory
+from trr.rag import day_text
 from trr.reason import memory_context, reason_crash
 from trr.schema import PORTFOLIO, Prediction
 
@@ -47,8 +48,16 @@ class TRRPipeline:
         reason_temp: float = 0.0,
         reason_max_new_tokens: int = 256,
         brainstorm_max_new_tokens: int = 768,
+        rag=None,
+        rag_labels=None,
     ) -> None:
         self.llm = llm if llm is not None else MockLLM()
+        # rag: optional CausalRAG retriever that injects case-based few-shot
+        # (similar PAST days + their realized outcomes) into the reasoning
+        # context. rag_labels maps a day -> realized crash label (0/1); only
+        # days older than the retriever's embargo are ever used, so it is causal.
+        self.rag = rag
+        self.rag_labels = rag_labels
         self.lam = lam
         self.top_k = top_k
         self.label_threshold = label_threshold
@@ -159,6 +168,18 @@ class TRRPipeline:
             tuples_list.append([e.as_tuple() for e in pruned])
             contexts.append(memory_context(decayed))
             n_edges.append(len(pruned))
+
+        # Phase B2 (optional) — RAG: prepend case-based few-shot (similar PAST
+        # days + realized outcomes) to each day's context. Causal: the retriever
+        # only ever looks back beyond its embargo.
+        if self.rag is not None:
+            self.rag.fit([day_text(dn) for dn in day_news], dates)
+            labels = [int(self.rag_labels.get(d, 0)) if self.rag_labels else 0
+                      for d in dates]
+            for i in range(len(contexts)):
+                block = self.rag.fewshot(i, labels)
+                if block:
+                    contexts[i] = block + "\n" + contexts[i]
 
         # Phase C — batched reasoning.
         if self.target_mode == "direction":

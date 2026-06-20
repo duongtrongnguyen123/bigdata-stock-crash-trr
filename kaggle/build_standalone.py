@@ -9,7 +9,7 @@ Output: kaggle/trr_standalone.py  (set as code_file for a fresh kernel).
 import os
 
 MODULES = ["schema", "llm", "memory", "attention", "brainstorm",
-           "reason", "pipeline", "news", "labels"]
+           "reason", "pipeline", "news", "labels", "rag"]
 
 HEADER = '''"""TRR crypto crash detection — SELF-CONTAINED Kaggle kernel (Qwen / Nemotron).
 
@@ -191,11 +191,20 @@ def main():
                              batch_size=GEN_BATCH_SIZE, max_input_tokens=MAX_INPUT_TOKENS)
 
     print(f"[kernel] window {start}..{end}  news_items={len(news)}", flush=True)
+    use_rag = os.environ.get("USE_RAG", "0") == "1"
+    rag, rag_labels = None, None
+    if use_rag:
+        lab = crash_labels().copy()
+        lab.index = pd.to_datetime(lab.index).date
+        rag_labels = {d: int(lab["crash"].get(d, 0)) for d in group_by_day(news)}
+        rag = CausalRAG(embargo=5, k=5)
+        print("[kernel] RAG case-based few-shot ENABLED", flush=True)
     pipe = TRRPipeline(llm=llm, batch=True, cross_batch=True,
                        max_items_per_day=MAX_ITEMS_PER_DAY, lam=LAM, top_k=TOP_K,
                        per_asset=PER_ASSET, reason_samples=REASON_SAMPLES,
                        reason_temp=REASON_TEMP, reason_max_new_tokens=REASON_MAXTOK,
-                       brainstorm_max_new_tokens=BRAINSTORM_MAXTOK)
+                       brainstorm_max_new_tokens=BRAINSTORM_MAXTOK,
+                       rag=rag, rag_labels=rag_labels)
     pred = pipe.run(group_by_day(news), start=start, end=end)
     print(f"[kernel] predicted {len(pred)} days", flush=True)
 
