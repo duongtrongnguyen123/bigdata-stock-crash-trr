@@ -46,3 +46,7 @@ data/news_raw/
 Lab09*
 data/stockdata/
 data/stocknews/
+kaggle/sweep_lam*.py
+kaggle/ds_*/
+kaggle/push_*/
+kaggle/build_stock/
