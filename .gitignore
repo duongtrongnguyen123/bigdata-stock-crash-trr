@@ -50,3 +50,15 @@ kaggle/sweep_lam*.py
 kaggle/ds_*/
 kaggle/push_*/
 kaggle/build_stock/
+data/fnspid/
+kaggle/build_fnspid/
+kaggle/build_stock_wide/
+kaggle/shard_*.py
+kaggle/crypto_*.py
+kaggle/stock_base.py
+kaggle/stock_rag.py
+kaggle/sweep_lam*.py
+kaggle/wds_*/
+kaggle/fds_*/
+kaggle/ps_*/
+kaggle/pf_*/
