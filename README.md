@@ -107,7 +107,7 @@ reports/     RESULTS_TRR.md (master results)
 
 ```bash
 # venv: /home/nduong/dev/bigdata/.venv/bin/python  (bare `python` not on PATH)
-.venv/bin/python -m pytest tests/ serving/tests/ -q        # tests (75 passing)
+.venv/bin/python -m pytest tests/ serving/tests/ -q        # tests (79 passing)
 bash scripts/run_all.sh                                    # reproduce analysis (no GPU)
 .venv/bin/streamlit run webapp/app.py                      # web app -> http://localhost:8501
 
