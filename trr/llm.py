@@ -180,12 +180,21 @@ class ReasoningLLM(ABC):
 
     @staticmethod
     def _impact_batch_prompt(news_items: list[NewsItem],
-                             candidate_assets: list[str]) -> str:
+                             candidate_assets: list[str],
+                             elicit_chains: bool = False) -> str:
         assets = ", ".join(candidate_assets)
         day = news_items[0].timestamp if news_items else None
         day_str = f"{day:%Y-%m-%d}" if day is not None else ""
         headlines = "\n".join(
             f"  [{i}] {item.text()}" for i, item in enumerate(news_items)
+        )
+        chain_hint = (
+            "When an event acts THROUGH an intermediary (a sector, commodity, "
+            "company or another asset) before reaching a portfolio asset, emit "
+            "BOTH hops as separate edges (event->intermediary AND "
+            "intermediary->asset) so multi-hop contagion chains form, e.g. "
+            "OIL->AIRLINES and AIRLINES->AAPL. "
+            if elicit_chains else ""
         )
         return (
             "You are a financial analyst building an impact graph for "
@@ -196,6 +205,7 @@ class ReasoningLLM(ABC):
             f"Headlines:\n{headlines}\n\n"
             "For EVERY headline that implies an impact on a portfolio asset, "
             "emit one or more directed impact relations toward that asset. "
+            + chain_hint +
             "Return ONLY a single JSON array of objects, each with keys: "
             "news_idx (the bracketed index of the source headline), subject, "
             "object, polarity (1 positive / -1 negative), weight (0..1), "
@@ -285,10 +295,12 @@ class ReasoningLLM(ABC):
 
     def brainstorm_multi(self, day_items_list: list[list[NewsItem]],
                         candidate_assets: list[str], max_items: int = 40,
-                        max_new_tokens: int = 768) -> list[list[ImpactEdge]]:
+                        max_new_tokens: int = 768,
+                        elicit_chains: bool = False) -> list[list[ImpactEdge]]:
         """Batched Brainstorming: one prompt per day, all generated together."""
         capped = [items[:max_items] for items in day_items_list]
-        prompts = [self._impact_batch_prompt(items, candidate_assets) for items in capped]
+        prompts = [self._impact_batch_prompt(items, candidate_assets, elicit_chains)
+                   for items in capped]
         raws = self.generate_batch(prompts, max_new_tokens=max_new_tokens)
         return [self._parse_batch_edges(raw, items) for items, raw in zip(capped, raws)]
 
@@ -520,7 +532,7 @@ class MockLLM(ReasoningLLM):
 
     # Use the deterministic heuristics (not the stub generate) in batched mode.
     def brainstorm_multi(self, day_items_list, candidate_assets, max_items=40,
-                        max_new_tokens=512):
+                        max_new_tokens=512, elicit_chains=False):
         return [self.extract_impacts_batch(items, candidate_assets, max_items)
                 for items in day_items_list]
 

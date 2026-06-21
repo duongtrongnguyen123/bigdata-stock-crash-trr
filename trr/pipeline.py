@@ -159,6 +159,7 @@ class TRRPipeline:
         edges_per_day = self.llm.brainstorm_multi(
             day_news, self.portfolio, max_items=self.max_items_per_day,
             max_new_tokens=self.brainstorm_max_new_tokens,
+            elicit_chains=self.multi_hop,
         )
 
         # Phase B — sequential memory/attention to build each day's reason input.
