@@ -124,6 +124,36 @@ st.markdown(
     f"Showing run **{run['label']}** (`out_{run['slug']}`)."
 )
 
+# ---- LIVE monitor (current prices + current news via yfinance, needs internet) ----
+st.header("🔴 Live market monitor")
+st.caption("Current prices + current headlines (yfinance) → TRR live crash signal "
+           "(MockLLM backend). Needs internet.")
+if st.button("↻ Fetch live market data"):
+    with st.spinner("Pulling live prices + news and running TRR…"):
+        try:
+            from webapp import live as _live
+            snap = _live.live_snapshot()
+            sig = snap["signal"]
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Live crash probability", f"{sig['crash_prob']:.0%}")
+            c2.metric("Portfolio move (1d)", f"{snap['portfolio_move']:+.2%}")
+            c3.metric("Live headlines", sig["n_news"])
+            st.caption(f"as of {sig['asof']} · {sig['n_edges']} impact edges · "
+                       f"rationale: {sig['rationale'][:120]}")
+            pc = st.columns(6)
+            for i, (tk, row) in enumerate(snap["prices"].items()):
+                pc[i % 6].metric(tk, row["price"],
+                                 f"{row['ret_1d']:+.2%}" if row["ret_1d"] is not None else "—")
+            with st.expander(f"Live headlines ({len(snap['headlines'])})"):
+                for h in snap["headlines"]:
+                    st.write(f"**[{h['ticker']}]** {h['title']}")
+        except Exception as exc:  # noqa: BLE001
+            st.warning(f"Live fetch unavailable (need internet / yfinance): {exc}")
+else:
+    st.info("Click **Fetch live market data** to pull current prices + news and "
+            "run TRR live. (The sections below are the offline research dashboard.)")
+st.markdown("---")
+
 latest_prob = summ["latest_prob"] or 0.0
 peak_prob = summ["peak_prob"] or 0.0
 
