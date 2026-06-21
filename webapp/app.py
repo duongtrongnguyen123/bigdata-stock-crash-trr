@@ -126,8 +126,11 @@ st.markdown(
 
 # ---- LIVE monitor (current prices + current news via yfinance, needs internet) ----
 st.header("🔴 Live market monitor")
-st.caption("Current prices + current headlines (yfinance) → TRR live crash signal "
-           "(MockLLM backend). Needs internet.")
+st.caption("Current prices + current headlines (yfinance) → TRR live crash signal. "
+           "Needs internet. NOTE: this is a *runnability/deployment* demo — live "
+           "news is sparse, noisy and unlabeled, so the rigorous AUROC numbers come "
+           "from the batch evaluation on curated, labeled historical news, NOT from "
+           "this live feed.")
 _use7b = st.checkbox("Use local Qwen2.5-7B-AWQ on the 2060 (real LLM, ~1–3 min) "
                      "instead of the instant heuristic", value=False)
 if st.button("↻ Fetch live market data"):

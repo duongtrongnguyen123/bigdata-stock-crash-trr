@@ -83,3 +83,13 @@ Kaggle outputs."
 - If `models/trr_meta.pkl` is missing, `/predict-ensemble` degrades gracefully
   (returns the raw LLM prob) — re-create with `.venv/bin/python -m train.export`.
 - Keep `reports/figures/*.png` open as static backup in case a service hiccups.
+
+## Honesty note — live vs batch (say this if asked)
+- **Scientific claims = batch evaluation** (curated, *labeled* historical news +
+  the 32B): AUROC 0.785→0.847, economic backtest, calibration. This is where
+  "the method works" is *proven*.
+- **Live monitor = deployment proof only**: same pipeline runs real-time on local
+  hardware (yfinance → TRR → signal on the 2060). Live news is sparse/noisy/
+  unlabeled, so it demonstrates *runnability*, NOT that the 0.78 AUROC holds live.
+- One line: "We prove the method works on labeled historical data; the live
+  monitor proves it deploys."
