@@ -89,7 +89,7 @@
 
 ---
 
-### SLIDE 6 — RAG: Truy hồi Tăng cường
+### SLIDE 6 — RAG (Retrieval-Augmented Generation)
 **② Nội dung**
 - **Vai trò 1 — Chọn lọc:** từ kho tin lớn mỗi ngày, lấy k tin liên quan-danh-mục nhất → LLM chỉ đọc phần giới hạn.
 - **Vai trò 2 — Few-shot theo tình huống:** truy hồi các NGÀY QUÁ KHỨ tương tự + kết cục thật ("từng crash/không") chèn vào prompt.

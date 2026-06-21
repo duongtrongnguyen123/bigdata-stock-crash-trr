@@ -8,7 +8,7 @@
 
 ## 1. Tóm tắt (Abstract)
 
-Đồ án xây dựng một hệ thống **dự đoán xác suất sụp đổ (crash)** của một danh mục cổ phiếu vốn hóa lớn trong **~3 ngày giao dịch tới**, bằng cách cho một **mô hình ngôn ngữ lớn (LLM) đọc tin tức tài chính** và suy luận **zero-shot** (không huấn luyện lại mô hình). Phương pháp gồm 4 pha: **Brainstorm → Memory → Attention → Reason**, kèm **RAG** (truy hồi tăng cường) để bám vào các tiền lệ lịch sử.
+Đồ án xây dựng một hệ thống **dự đoán xác suất sụp đổ (crash)** của một danh mục cổ phiếu vốn hóa lớn trong **~3 ngày giao dịch tới**, bằng cách cho một **mô hình ngôn ngữ lớn (LLM) đọc tin tức tài chính** và suy luận **zero-shot** (không huấn luyện lại mô hình). Phương pháp gồm 4 pha: **Brainstorm → Memory → Attention → Reason**, kèm **RAG** (Retrieval-Augmented Generation — truy hồi dữ liệu liên quan để bổ sung ngữ cảnh cho LLM) để bám vào các tiền lệ lịch sử.
 
 Trọng tâm Big Data: xử lý nguồn tin **23 GB / 15,7 triệu bài** (FNSPID) bằng kỹ thuật **stream-process, lập chỉ mục phân vùng, và chọn lọc bằng RAG**, kết hợp **tính toán phân tán** (Spark cho ETL, pool GPU Kaggle free-tier cho suy luận LLM).
 
@@ -74,7 +74,7 @@ Trọng tâm Big Data: xử lý nguồn tin **23 GB / 15,7 triệu bài** (FNSPI
 
 ---
 
-## 6. RAG — Truy hồi Tăng cường
+## 6. RAG — Retrieval-Augmented Generation
 
 Hai vai trò, cả hai đều đưa thêm ngữ cảnh vào LLM:
 1. **Chọn lọc theo truy hồi (retrieval-selection):** từ một kho tin lớn mỗi ngày, chọn *k* tin **liên quan nhất** → LLM chỉ đọc phần đã giới hạn (giữ chi phí LLM = O(số_ngày × k) dù corpus lớn cỡ GB).
