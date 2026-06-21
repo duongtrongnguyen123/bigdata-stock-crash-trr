@@ -134,14 +134,14 @@
 
 ### SLIDE 9 — Kiến trúc Lưu trữ: "Lưu khổng lồ, phục vụ tí hon"
 **② Nội dung**
-- **Lạnh:** corpus 12 GB (đĩa). **Ấm:** SQLite chỉ mục theo ngày 1,9 GB (tra cứu 1 ngày ~44 ms). **Nóng:** phần RAG đã chọn ~2 MB (tải lên Kaggle).
+- **Kho gốc:** corpus 12 GB trên đĩa → **Chỉ mục truy hồi:** SQLite theo ngày 1,9 GB (tra cứu 1 ngày ~44 ms) → **Phục vụ LLM:** phần RAG đã chọn ~2 MB.
 - Kỹ thuật: stream-and-filter (không lưu 23 GB thô), đọc theo từng khối (giới hạn RAM), chỉ đọc cột cần, chỉ mục phân vùng, chọn lọc RAG.
 - Dữ liệu dẫn xuất **không commit git** (chỉ commit code tái tạo).
 
 **🎨 Hình ảnh — sơ đồ PHỄU 3 tầng (funnel dọc):**
-> Phễu 3 tầng từ trên xuống, thu nhỏ dần: Tầng 1 (rộng nhất, xám) "Corpus 12 GB · 4,5 triệu bài"; Tầng 2 (vừa, xanh dương) "SQLite chỉ mục ngày · 1,9 GB · 44 ms/ngày"; Tầng 3 (nhỏ nhất, xanh lá) "Lát RAG ~2 MB → LLM". Bên cạnh mỗi tầng ghi nhãn nhiệt độ: 🧊 Lạnh / 🌡️ Ấm / 🔥 Nóng. Mũi tên giảm dần kích thước.
+> Phễu 3 tầng thu nhỏ dần (nhãn theo CHỨC NĂNG, không dùng nhãn nhiệt độ): Tầng 1 (rộng nhất, xám) "Kho gốc — Corpus 12 GB · 4,5 triệu bài"; Tầng 2 (vừa, xanh dương) "Chỉ mục truy hồi — SQLite theo ngày · 1,9 GB · 44 ms/ngày"; Tầng 3 (nhỏ nhất, xanh lá) "Phục vụ LLM — phần RAG ~2 MB". Mũi tên giảm dần kích thước.
 
-**🎤 Ghi chú:** Đây là câu trả lời trực tiếp cho "lưu dữ liệu khổng lồ thế nào".
+**🎤 Ghi chú:** Đây là câu trả lời cho "lưu dữ liệu khổng lồ thế nào"; thuật ngữ kỹ thuật: phân tầng lưu trữ (storage tiering).
 
 ---
 
@@ -169,7 +169,7 @@
 
 **🎨 Hình ảnh — (a) sơ đồ fan-out + (b) thanh thời gian:**
 > (a) Một "bộ điều phối" ở giữa toả ra 40 ô GPU nhỏ song song (lưới 8×5), tô xanh lá "đang chạy". Nhãn "40 mảnh song song trên pool GPU".
-> (b) Hai thanh ngang so sánh wall-clock: "Chạy tuần tự 1 GPU ≈ 5 giờ" (thanh đỏ dài) vs "Phân tán 40 mảnh ≈ 20 phút" (thanh xanh ngắn). Nhấn tỉ lệ rút gọn ~15×.
+> (b) Hai thanh ngang so sánh thời gian chạy thực tế (wall-clock): "Chạy tuần tự 1 GPU ≈ 5 giờ" (thanh đỏ dài) vs "Phân tán 40 mảnh ≈ 20 phút" (thanh xanh ngắn). Nhấn tỉ lệ rút gọn ~15×.
 
 **🎤 Ghi chú (trung thực):** Đây là *mẫu thiết kế phân tán* — cùng code chạy trên cluster cloud/HPC thật. Pool ở đây dựng từ GPU free-tier Kaggle (giải pháp sinh viên, không phải cluster chính thức); **bản chạy 1 tài khoản ~5 giờ cho cùng số**, nên kết quả không phụ thuộc cách phân tán. Vì điểm nghẽn là LLM (không phải join dữ liệu) nên ta phân tán SUY LUẬN.
 

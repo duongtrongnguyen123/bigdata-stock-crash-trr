@@ -89,9 +89,9 @@ Hai vai trò, cả hai đều đưa thêm ngữ cảnh vào LLM:
 ### 7.1 Lưu trữ phân tầng — "lưu khổng lồ, phục vụ tí hon"
 | Tầng | Nội dung | Kích thước |
 |---|---|---|
-| Lạnh / khối | corpus 2016–2023 | 12 GB (đĩa cục bộ) |
-| Ấm / chỉ mục | **SQLite lập chỉ mục theo ngày** | 1,9 GB (tra cứu 1 ngày ~44 ms) |
-| Nóng / phục vụ | phần tin RAG đã chọn | ~2 MB (tải lên Kaggle) |
+| Kho gốc | corpus 2016–2023 | 12 GB (đĩa cục bộ) |
+| Chỉ mục truy hồi | **SQLite lập chỉ mục theo ngày** | 1,9 GB (tra cứu 1 ngày ~44 ms) |
+| Phục vụ LLM | phần tin RAG đã chọn | ~2 MB (tải lên Kaggle) |
 
 Kỹ thuật: **stream-and-filter** (không lưu file thô 23 GB), **đọc theo từng khối (giới hạn RAM)**, **chỉ đọc các cột cần (bỏ cột nội dung)**, **chỉ mục phân vùng (SQLite)**, **chọn lọc RAG**. Dữ liệu dẫn xuất **không commit vào git** (chỉ commit code tái tạo).
 
