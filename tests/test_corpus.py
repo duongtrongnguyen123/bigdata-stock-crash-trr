@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
-from datetime import date
+from datetime import date, datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -19,6 +19,7 @@ import pandas as pd
 
 from trr.corpus import CorpusIndex, build_index
 from trr.pipeline import TRRPipeline
+from trr.rag import CausalRAG
 from trr.schema import NewsItem
 
 
@@ -98,6 +99,29 @@ def test_news_by_day_feeds_pipeline():
     # The crash day should not be the calmest of the three.
     assert df.loc[date(2022, 1, 2), "crash_prob"] >= df.loc[date(2022, 1, 3), "crash_prob"]
     idx.close()
+
+
+def test_rag_lookback_bank_spans_full_history_under_sharding():
+    """A date-sharded run (start restricts the predicted window) must still fit
+    the RAG analogue bank on ALL days in news_by_day, so pre-window crash days
+    remain retrievable as causal analogues."""
+    days = [date(2022, 1, i) for i in range(1, 9)]
+    by_day = {
+        d: [NewsItem(id=f"{i}", timestamp=datetime(d.year, d.month, d.day),
+                     title=("exchange hack panic selloff plunge" if i < 3
+                            else "calm market mild gains"),
+                     assets=["AAPL"])]
+        for i, d in enumerate(days)
+    }
+    labels = {d: (1 if i < 3 else 0) for i, d in enumerate(days)}
+    rag = CausalRAG(embargo=1, k=2, min_sim=0.0)
+    pipe = TRRPipeline(portfolio=["AAPL"], batch=True, cross_batch=True,
+                       rag=rag, rag_labels=labels)
+    # Predict only the last 3 days; the bank must still cover all 8.
+    out = pipe.run(by_day, start=date(2022, 1, 6))
+    assert len(out) == 3
+    assert len(rag._dates) == 8, rag._dates       # full history, not just window
+    assert days[0] in rag._dates                  # a pre-window day is in the bank
 
 
 if __name__ == "__main__":

@@ -74,3 +74,11 @@ kaggle/out_daily/
 data/fnspid_big/
 data/fnspid_corpus/
 data/fnspid_raw/
+
+# corpus backtest generated artifacts (rebuild via gen_corpus_shards.py)
+kaggle/sd_corpus/
+kaggle/cshards/
+kaggle/out_corpus/
+kaggle/dsc_*/
+kaggle/pk_*/
+data/stockdata/stocknews_corpus.csv

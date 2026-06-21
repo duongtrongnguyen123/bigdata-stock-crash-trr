@@ -198,12 +198,22 @@ class TRRPipeline:
         # Phase B2 (optional) — RAG: prepend case-based few-shot (similar PAST
         # days + realized outcomes) to each day's context. Causal: the retriever
         # only ever looks back beyond its embargo.
+        #
+        # The analogue bank is fitted on the FULL news history present in
+        # `news_by_day` (all its keys), not just the predicted window. This is
+        # what lets a DATE-SHARDED run — where `start`/`end` restrict `dates` to
+        # one shard — still retrieve causal analogues from days BEFORE the shard
+        # window (the "lookback bank"). When no window is set the bank equals the
+        # predicted dates, so single-run behaviour is unchanged.
         if self.rag is not None:
-            self.rag.fit([day_text(dn) for dn in day_news], dates)
-            labels = [int(self.rag_labels.get(d, 0)) if self.rag_labels else 0
-                      for d in dates]
+            bank_dates = sorted(news_by_day.keys())
+            bank_texts = [day_text(news_by_day.get(d, [])) for d in bank_dates]
+            self.rag.fit(bank_texts, bank_dates)
+            bank_labels = [int(self.rag_labels.get(d, 0)) if self.rag_labels else 0
+                           for d in bank_dates]
+            bank_pos = {d: i for i, d in enumerate(bank_dates)}
             for i in range(len(contexts)):
-                block = self.rag.fewshot(i, labels)
+                block = self.rag.fewshot(bank_pos[dates[i]], bank_labels)
                 if block:
                     contexts[i] = block + "\n" + contexts[i]
 

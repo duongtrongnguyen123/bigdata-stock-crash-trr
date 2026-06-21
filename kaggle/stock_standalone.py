@@ -309,12 +309,21 @@ class ReasoningLLM(ABC):
 
     @staticmethod
     def _impact_batch_prompt(news_items: list[NewsItem],
-                             candidate_assets: list[str]) -> str:
+                             candidate_assets: list[str],
+                             elicit_chains: bool = False) -> str:
         assets = ", ".join(candidate_assets)
         day = news_items[0].timestamp if news_items else None
         day_str = f"{day:%Y-%m-%d}" if day is not None else ""
         headlines = "\n".join(
             f"  [{i}] {item.text()}" for i, item in enumerate(news_items)
+        )
+        chain_hint = (
+            "When an event acts THROUGH an intermediary (a sector, commodity, "
+            "company or another asset) before reaching a portfolio asset, emit "
+            "BOTH hops as separate edges (event->intermediary AND "
+            "intermediary->asset) so multi-hop contagion chains form, e.g. "
+            "OIL->AIRLINES and AIRLINES->AAPL. "
+            if elicit_chains else ""
         )
         return (
             "You are a financial analyst building an impact graph for "
@@ -325,6 +334,7 @@ class ReasoningLLM(ABC):
             f"Headlines:\n{headlines}\n\n"
             "For EVERY headline that implies an impact on a portfolio asset, "
             "emit one or more directed impact relations toward that asset. "
+            + chain_hint +
             "Return ONLY a single JSON array of objects, each with keys: "
             "news_idx (the bracketed index of the source headline), subject, "
             "object, polarity (1 positive / -1 negative), weight (0..1), "
@@ -414,10 +424,12 @@ class ReasoningLLM(ABC):
 
     def brainstorm_multi(self, day_items_list: list[list[NewsItem]],
                         candidate_assets: list[str], max_items: int = 40,
-                        max_new_tokens: int = 768) -> list[list[ImpactEdge]]:
+                        max_new_tokens: int = 768,
+                        elicit_chains: bool = False) -> list[list[ImpactEdge]]:
         """Batched Brainstorming: one prompt per day, all generated together."""
         capped = [items[:max_items] for items in day_items_list]
-        prompts = [self._impact_batch_prompt(items, candidate_assets) for items in capped]
+        prompts = [self._impact_batch_prompt(items, candidate_assets, elicit_chains)
+                   for items in capped]
         raws = self.generate_batch(prompts, max_new_tokens=max_new_tokens)
         return [self._parse_batch_edges(raw, items) for items, raw in zip(capped, raws)]
 
@@ -649,7 +661,7 @@ class MockLLM(ReasoningLLM):
 
     # Use the deterministic heuristics (not the stub generate) in batched mode.
     def brainstorm_multi(self, day_items_list, candidate_assets, max_items=40,
-                        max_new_tokens=512):
+                        max_new_tokens=512, elicit_chains=False):
         return [self.extract_impacts_batch(items, candidate_assets, max_items)
                 for items in day_items_list]
 
@@ -1111,8 +1123,18 @@ class TRRPipeline:
         brainstorm_max_new_tokens: int = 768,
         rag=None,
         rag_labels=None,
+        multi_hop=False,
+        select_mode="head",
     ) -> None:
+        # select_mode: how to cap to max_items_per_day when a day has more news.
+        # "head" = first-N (default, unchanged); "salient" = dedup + rank by
+        # crash/▲ salience + ticker mention (lets news VOLUME scale without
+        # raising LLM cost — the bounded set is the most informative).
+        self.select_mode = select_mode
         self.llm = llm if llm is not None else MockLLM()
+        # multi_hop: enrich the reasoning context with multi-hop causal chains
+        # (Graph-RAG) walked from the accumulated impact graph.
+        self.multi_hop = multi_hop
         # rag: optional CausalRAG retriever that injects case-based few-shot
         # (similar PAST days + their realized outcomes) into the reasoning
         # context. rag_labels maps a day -> realized crash label (0/1); only
@@ -1211,11 +1233,19 @@ class TRRPipeline:
         C: reason ALL days in one batched LLM pass.
         """
         day_news = [news_by_day.get(d, []) for d in dates]
+        if self.select_mode == "salient":
+            day_news = [select_salient(dn, self.max_items_per_day, self.portfolio)
+                        for dn in day_news]
+        elif self.select_mode == "rag":  # retrieve most crash/portfolio-relevant
+            q = crash_query(self.portfolio)
+            day_news = [select_relevant(dn, q, self.max_items_per_day, self.portfolio)
+                        for dn in day_news]
 
         # Phase A — batched brainstorming.
         edges_per_day = self.llm.brainstorm_multi(
             day_news, self.portfolio, max_items=self.max_items_per_day,
             max_new_tokens=self.brainstorm_max_new_tokens,
+            elicit_chains=self.multi_hop,
         )
 
         # Phase B — sequential memory/attention to build each day's reason input.
@@ -1227,18 +1257,33 @@ class TRRPipeline:
             combined = today_edges + [e for e in salient if e not in today_edges]
             pruned = pagerank_prune(combined, self.portfolio, top_k=self.top_k)
             tuples_list.append([e.as_tuple() for e in pruned])
-            contexts.append(memory_context(decayed))
+            ctx = memory_context(decayed)
+            if self.multi_hop:
+                block = chains_context(combined, self.portfolio)
+                if block:
+                    ctx = block + ctx
+            contexts.append(ctx)
             n_edges.append(len(pruned))
 
         # Phase B2 (optional) — RAG: prepend case-based few-shot (similar PAST
         # days + realized outcomes) to each day's context. Causal: the retriever
         # only ever looks back beyond its embargo.
+        #
+        # The analogue bank is fitted on the FULL news history present in
+        # `news_by_day` (all its keys), not just the predicted window. This is
+        # what lets a DATE-SHARDED run — where `start`/`end` restrict `dates` to
+        # one shard — still retrieve causal analogues from days BEFORE the shard
+        # window (the "lookback bank"). When no window is set the bank equals the
+        # predicted dates, so single-run behaviour is unchanged.
         if self.rag is not None:
-            self.rag.fit([day_text(dn) for dn in day_news], dates)
-            labels = [int(self.rag_labels.get(d, 0)) if self.rag_labels else 0
-                      for d in dates]
+            bank_dates = sorted(news_by_day.keys())
+            bank_texts = [day_text(news_by_day.get(d, [])) for d in bank_dates]
+            self.rag.fit(bank_texts, bank_dates)
+            bank_labels = [int(self.rag_labels.get(d, 0)) if self.rag_labels else 0
+                           for d in bank_dates]
+            bank_pos = {d: i for i, d in enumerate(bank_dates)}
             for i in range(len(contexts)):
-                block = self.rag.fewshot(i, labels)
+                block = self.rag.fewshot(bank_pos[dates[i]], bank_labels)
                 if block:
                     contexts[i] = block + "\n" + contexts[i]
 
@@ -1934,7 +1979,51 @@ class CausalRAG:
         norms = np.sqrt(m.multiply(m).sum(axis=1))
         norms[norms == 0] = 1.0
         self._matrix = m.multiply(1.0 / norms).tocsr()
+        self._vec = vec  # keep vectorizer so NEW (live) queries can be embedded
         return self
+
+    def fewshot_for_query(self, query_text: str, labels: list[int]) -> str:
+        """Live RAG: retrieve the most similar HISTORICAL days to a NEW query
+        (today's live news) from this fitted LABELED bank, and format their
+        realized outcomes as few-shot. Unlike fewshot(), the query is not in the
+        bank, so there is no embargo — the whole bank is past, labeled history.
+        """
+        if self._matrix is None or getattr(self, "_vec", None) is None:
+            return ""
+        q = self._vec.transform([query_text or "__empty__"]).astype(np.float32)
+        qn = np.sqrt(q.multiply(q).sum())
+        if qn == 0:
+            return ""
+        sims = np.asarray((self._matrix @ (q.multiply(1.0 / qn)).T).todense()).ravel()
+        order = np.argsort(-sims)[: self.k]
+        picks = [(j, float(sims[j])) for j in order if sims[j] >= self.min_sim]
+        if not picks:
+            return ""
+        n_crash = sum(1 for j, _ in picks if labels[j] == 1)
+        lines = [f"  - {self._dates[j]} (sim {s:.2f}): "
+                 f"{'CRASHED (next 3d)' if labels[j] == 1 else 'no crash'}"
+                 for j, s in picks]
+        return ("HISTORICAL ANALOGUES — the most similar LABELED past days to "
+                f"today's news ({n_crash}/{len(picks)} crashed):\n" + "\n".join(lines)
+                + "\nWeight these: if today resembles prior CRASH days, lean higher.\n")
+
+    def analogue_crash_rate(self, day_idx: int, labels: list[int]) -> float:
+        """Numeric meta-feature: the fraction of the retrieved similar PAST days
+        that actually crashed (0.0 if no eligible analogue). Causal — only days
+        older than the embargo are considered.
+        """
+        if self._matrix is None:
+            return 0.0
+        cutoff = day_idx - self.embargo
+        if cutoff <= 0:
+            return 0.0
+        q = self._matrix[day_idx]
+        sims = np.asarray((self._matrix[:cutoff] @ q.T).todense()).ravel()
+        order = np.argsort(-sims)[: self.k]
+        picks = [j for j in order if sims[j] >= self.min_sim]
+        if not picks:
+            return 0.0
+        return float(np.mean([labels[j] for j in picks]))
 
     def fewshot(self, day_idx: int, labels: list[int]) -> str:
         """Build the analogue few-shot block for the day at `day_idx`.
@@ -1972,6 +2061,123 @@ class CausalRAG:
 def day_text(day_news: list) -> str:
     """Concatenate a day's news into one document for TF-IDF."""
     return " ".join(item.text() for item in day_news) if day_news else ""
+
+
+
+# ===================== trr/graphrag.py =====================
+
+"""Multi-hop Graph-RAG — relational retrieval beyond single edges.
+
+The base TRR pipeline feeds the LLM single (subject -> object) impact edges. Real
+contagion is multi-hop: e.g. OIL_PRICE -> AIRLINES -> the portfolio. This module
+walks the accumulated impact graph (today's edges + decayed memory) and extracts
+the strongest directed CHAINS (length <= max_hops) terminating at a portfolio
+asset, surfacing them as explicit causal paths in the reasoning context.
+
+In-process (networkx) — the same idea as the comparison project's Neo4j Graph-RAG,
+but with no external database. Deterministic.
+"""
+
+import networkx as nx
+
+
+def _polarity_str(p) -> str:
+    return "+" if p >= 0 else "-"
+
+
+def multi_hop_chains(edges, portfolio, max_hops: int = 2, top: int = 8) -> list[str]:
+    """Return up to `top` strongest causal chains ending at a portfolio asset.
+
+    `edges` is a list of ImpactEdge (or tuples) with subject, object, polarity,
+    weight. Chains are ranked by the product of their edge weights (a path is
+    only as strong as its weakest, multiplicatively-combined link).
+    """
+    g = nx.DiGraph()
+    for e in edges:
+        subj = getattr(e, "subject", None)
+        obj = getattr(e, "object", None)
+        if subj is None:  # tuple form (time, subject, polarity, object/weight)
+            continue
+        w = float(getattr(e, "weight", 0.5))
+        pol = getattr(e, "polarity", 1)
+        # keep the strongest parallel edge
+        if g.has_edge(subj, obj) and g[subj][obj]["weight"] >= w:
+            continue
+        g.add_edge(subj, obj, weight=w, polarity=pol)
+
+    targets = {a for a in portfolio if a in g}
+    chains: list[tuple[float, str]] = []
+    seen: set[tuple] = set()
+    for tgt in targets:
+        # walk backwards from the target up to max_hops
+        for src in g.nodes:
+            if src == tgt:
+                continue
+            try:
+                paths = nx.all_simple_paths(g, src, tgt, cutoff=max_hops)
+            except (nx.NodeNotFound, nx.NetworkXNoPath):
+                continue
+            for path in paths:
+                if len(path) < 3:  # only genuine multi-hop (>=2 edges)
+                    continue
+                key = tuple(path)
+                if key in seen:
+                    continue
+                seen.add(key)
+                strength = 1.0
+                parts = [path[0]]
+                for u, v in zip(path[:-1], path[1:]):
+                    d = g[u][v]
+                    strength *= d["weight"]
+                    parts.append(f"--({_polarity_str(d['polarity'])})-->{v}")
+                chains.append((strength, " ".join(parts)))
+    chains.sort(key=lambda x: -x[0])
+    return [c for _, c in chains[:top]]
+
+
+def shared_drivers(edges, portfolio, min_assets: int = 2, top: int = 6):
+    """Find single drivers that hit MULTIPLE portfolio assets at once.
+
+    A node with negative edges into >= min_assets portfolio assets is a systemic
+    / contagion signal — the relational pattern that distinguishes a broad shock
+    from an isolated one. Returns (driver, [assets], mean_weight, polarity).
+    """
+    g = nx.DiGraph()
+    for e in edges:
+        subj = getattr(e, "subject", None)
+        obj = getattr(e, "object", None)
+        if subj is None:
+            continue
+        g.add_edge(subj, obj, weight=float(getattr(e, "weight", 0.5)),
+                   polarity=getattr(e, "polarity", 1))
+    pset = set(portfolio)
+    out = []
+    for node in g.nodes:
+        hit = [(v, g[node][v]) for v in g.successors(node) if v in pset]
+        if len(hit) >= min_assets:
+            mean_w = sum(d["weight"] for _, d in hit) / len(hit)
+            pol = -1 if sum(d["polarity"] for _, d in hit) < 0 else 1
+            out.append((node, [v for v, _ in hit], mean_w, pol))
+    out.sort(key=lambda x: (-len(x[1]), -x[2]))
+    return out[:top]
+
+
+def chains_context(edges, portfolio, max_hops: int = 2, top: int = 8) -> str:
+    """Reasoning-context block: multi-hop chains + shared systemic drivers."""
+    parts = []
+    chains = multi_hop_chains(edges, portfolio, max_hops, top)
+    if chains:
+        parts.append("MULTI-HOP CAUSAL CHAINS (indirect contagion paths into the "
+                     "portfolio; weigh propagated effects, not just direct hits):\n"
+                     + "\n".join(f"  - {c}" for c in chains))
+    drivers = shared_drivers(edges, portfolio)
+    if drivers:
+        lines = [f"  - {n} hits {','.join(a)} ({_polarity_str(p)}, "
+                 f"w~{w:.2f})" for n, a, w, p in drivers]
+        parts.append("SHARED SYSTEMIC DRIVERS (one event hitting MULTIPLE "
+                     "portfolio assets at once — breadth signals contagion):\n"
+                     + "\n".join(lines))
+    return ("\n".join(parts) + "\n") if parts else ""
 
 
 
