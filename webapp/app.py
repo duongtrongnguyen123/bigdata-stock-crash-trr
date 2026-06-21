@@ -257,14 +257,12 @@ with tab_live:
             "tumble sink slide warn cut loss recession halt panic downgrade").split()
     _POS = ("surge soar rally gain jump rise beat upgrade record high boom approve "
             "win growth profit strong buy bullish").split()
-    fc1, fc2, fc3 = st.columns([1, 1, 1])
+    fc1, fc2 = st.columns([1, 1])
     _feed_rate = fc1.selectbox("Feed refresh", [10, 15, 30, 60], index=1,
                                format_func=lambda s: f"every {s}s", key="feedrate")
     _filter = fc2.selectbox("Filter", ["All", "🏢 Companies", "🌐 Macro", "₿ Crypto",
                                        "🌍 World"], key="feedfilter")
-    _show_n = fc3.slider("Show last", 20, 500, 200, 20, key="feedshow",
-                         help="Display only — does not affect the prediction "
-                              "(the model uses ~20–40/day regardless).")
+    st.session_state.setdefault("feed_n", 50)        # show 50 latest by default
 
     @st.fragment(run_every=_feed_rate)
     def _news_feed():
@@ -300,14 +298,15 @@ with tab_live:
                     "🏢 Companies": "TICKER"}
             if _filter in fmap:
                 view = [r for r in items if _kind(r["tag"]) == fmap[_filter]]
-            st.caption(f"showing {min(_show_n, len(view))} of {len(view)} accumulated "
+            n = st.session_state.get("feed_n", 50)
+            st.caption(f"showing {min(n, len(view))} of {len(view)} accumulated "
                        f"· 🆕 {fresh} new this refresh · source: Yahoo Finance (yfinance) "
                        f"· display only (model predicts on ~20–40/day)")
             _STYLE = {"MACRO": ("🌐", "#fef3c7", "#b45309"),
                       "CRYPTO": ("₿", "#fae8ff", "#a21caf"),
                       "WORLD": ("🌍", "#dbeafe", "#1d4ed8"),
                       "TICKER": ("🏢", "#eef2ff", "#3730a3")}
-            for r in view[:_show_n]:
+            for r in view[:n]:
                 tag = r["tag"]; icon, bg, col = _STYLE[_kind(tag)]
                 low = r["title"].lower()
                 senti = ("#dc2626" if any(w in low for w in _NEG) else
@@ -325,6 +324,15 @@ with tab_live:
                     f"<span style='color:{senti}'>{r['title']}</span> "
                     f"<span style='color:#cbd5e1;font-size:0.72rem'>· {r['src']}</span></div>",
                     unsafe_allow_html=True)
+            # show-more / show-less controls (default 50, +50 per press)
+            mc1, mc2 = st.columns([1, 1])
+            if n < len(view):
+                mc1.button(f"▾ Show 50 more  ({len(view) - n} remaining)", key="feedmore",
+                           on_click=lambda: st.session_state.update(
+                               feed_n=st.session_state.get("feed_n", 50) + 50))
+            if st.session_state.get("feed_n", 50) > 50:
+                mc2.button("▴ Show less (reset to 50)", key="feedless",
+                           on_click=lambda: st.session_state.update(feed_n=50))
         except Exception as exc:  # noqa: BLE001
             st.caption(f"news feed unavailable: {exc}")
 
