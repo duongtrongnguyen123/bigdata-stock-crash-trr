@@ -29,7 +29,15 @@ def fetch_live_headlines(tickers=TICKERS, max_per: int = 6):
             if not title or title in seen:
                 continue
             seen.add(title)
-            items.append(NewsItem(id=f"{t}-{i}", timestamp=now, title=title,
+            # use the ARTICLE's real publish time so a multi-day window can form
+            ts = now
+            pub = c.get("pubDate") or c.get("displayTime")
+            if pub:
+                try:
+                    ts = datetime.fromisoformat(str(pub).replace("Z", "+00:00")).replace(tzinfo=None)
+                except ValueError:
+                    pass
+            items.append(NewsItem(id=f"{t}-{i}", timestamp=ts, title=title,
                                   source="yfinance", assets=[t]))
     return items
 
@@ -92,6 +100,39 @@ def run_live(headlines, use_local_7b: bool = False):
         "edges": [{"subject": e.subject, "object": e.object,
                    "polarity": e.polarity, "weight": round(e.weight, 2)}
                   for e in pruned[:20]],
+        "asof": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "backend": "Qwen2.5-7B-AWQ (local 2060)" if real else "MockLLM (heuristic)",
+    }
+
+
+def run_live_window(items, use_local_7b: bool = False):
+    """Feed the WHOLE multi-day window through the full TRR pipeline (brainstorm
+    per day -> decaying memory -> reason), the way TRR is meant to consume
+    history — not as one flat prompt. `items` is a list of NewsItem spanning days.
+    Returns the latest day's signal + how many days were processed.
+    """
+    from trr.news import group_by_day
+    from trr.pipeline import TRRPipeline
+    llm, real = _get_llm(use_local_7b)
+    by_day = group_by_day(items)
+    pipe = TRRPipeline(llm=llm, portfolio=TICKERS, batch=True, cross_batch=True,
+                       max_items_per_day=12 if real else 40,
+                       reason_max_new_tokens=160 if real else 256,
+                       brainstorm_max_new_tokens=400 if real else 768)
+    pred = pipe.run(by_day)
+    if len(pred) == 0:
+        return {"crash_prob": 0.0, "rationale": "no news", "n_news": 0,
+                "n_edges": 0, "days": 0, "edges": [],
+                "asof": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "backend": "Qwen2.5-7B-AWQ (local 2060)" if real else "MockLLM (heuristic)"}
+    last = pred.iloc[-1]
+    return {
+        "crash_prob": float(last["crash_prob"]),
+        "rationale": str(last["rationale"]),
+        "n_news": int(pred["n_news"].sum()),
+        "n_edges": int(last["n_edges"]),
+        "days": int(len(pred)),
+        "edges": [],
         "asof": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "backend": "Qwen2.5-7B-AWQ (local 2060)" if real else "MockLLM (heuristic)",
     }

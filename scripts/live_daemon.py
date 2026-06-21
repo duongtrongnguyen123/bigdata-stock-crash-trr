@@ -67,16 +67,17 @@ def _to_newsitems(rows: list[dict]):
 
 def tick(store: list[dict], retain_min: int, backend: str, force: bool):
     """One poll: fetch, merge, prune, (maybe) run model. Returns (store, ran)."""
-    from webapp.live import fetch_live_headlines, fetch_live_prices, run_live
+    from webapp.live import fetch_live_headlines, fetch_live_prices, run_live_window
     now = _now()
-    # 1-2. fetch + merge new (dedup by ticker+title)
+    # 1-2. fetch + merge new (dedup by ticker+title); keep the ARTICLE's pub time
     seen = {(r["ticker"], r["title"]) for r in store}
     fresh = 0
     for h in fetch_live_headlines():
         key = (h.assets[0], h.title)
         if key not in seen:
             seen.add(key)
-            store.append({"id": h.id, "ts": now, "ticker": h.assets[0], "title": h.title})
+            art_ts = h.timestamp.replace(tzinfo=timezone.utc).timestamp()
+            store.append({"id": h.id, "ts": art_ts, "ticker": h.assets[0], "title": h.title})
             fresh += 1
     # 3. prune by retention
     cutoff = now - retain_min * 60
@@ -92,7 +93,7 @@ def tick(store: list[dict], retain_min: int, backend: str, force: bool):
     ran = False
     if fresh or force:
         items = _to_newsitems(store)
-        sig = run_live(items, use_local_7b=(backend == "7b"))
+        sig = run_live_window(items, use_local_7b=(backend == "7b"))  # full multi-day pipeline
         sig["portfolio_move"] = port_move
         sig["retained_news"] = len(store)
         with open(SIGNAL_PATH, "w") as f:
