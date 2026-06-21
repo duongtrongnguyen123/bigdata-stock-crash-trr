@@ -1,5 +1,5 @@
 # BÁO CÁO ĐỒ ÁN BIG DATA
-## Suy luận Quan hệ theo Thời gian của Mô hình Ngôn ngữ Lớn để Dự đoán Sụp đổ Giá Cổ phiếu
+## Suy luận Quan hệ theo Thời gian của Mô hình Ngôn ngữ Lớn để Dự đoán Crash Giá Cổ phiếu
 ### (Temporal Relational Reasoning of LLMs for Stock Crash Prediction — phỏng theo arXiv:2410.17266)
 
 > Ghi chú: Các chỗ đánh dấu 「điền sau」 là kết quả đang chạy (mẻ Kaggle toàn bộ corpus 2016–2023 với lọc theo danh mục) — sẽ điền số khi có. Các con số đã có là số thật đã đo.
@@ -8,7 +8,7 @@
 
 ## 1. Tóm tắt (Abstract)
 
-Đồ án xây dựng một hệ thống **dự đoán xác suất sụp đổ (crash)** của một danh mục cổ phiếu vốn hóa lớn trong **~3 ngày giao dịch tới**, bằng cách cho một **mô hình ngôn ngữ lớn (LLM) đọc tin tức tài chính** và suy luận **zero-shot** (không huấn luyện lại mô hình). Phương pháp gồm 4 pha: **Brainstorm → Memory → Attention → Reason**, kèm **RAG** (Retrieval-Augmented Generation — truy hồi dữ liệu liên quan để bổ sung ngữ cảnh cho LLM) để bám vào các tiền lệ lịch sử.
+Đồ án xây dựng một hệ thống **dự đoán xác suất crash** của một danh mục cổ phiếu vốn hóa lớn trong **~3 ngày giao dịch tới**, bằng cách cho một **mô hình ngôn ngữ lớn (LLM) đọc tin tức tài chính** và suy luận **zero-shot** (không huấn luyện lại mô hình). Phương pháp gồm 4 pha: **Brainstorm → Memory → Attention → Reason**, kèm **RAG** (Retrieval-Augmented Generation — truy hồi dữ liệu liên quan để bổ sung ngữ cảnh cho LLM) để bám vào các tiền lệ lịch sử.
 
 Trọng tâm Big Data: xử lý nguồn tin **23 GB / 15,7 triệu bài** (FNSPID) bằng kỹ thuật **stream-process, lập chỉ mục phân vùng, và chọn lọc bằng RAG**, kết hợp **tính toán phân tán** (Spark cho ETL, pool GPU Kaggle free-tier cho suy luận LLM).
 
@@ -19,10 +19,10 @@ Trọng tâm Big Data: xử lý nguồn tin **23 GB / 15,7 triệu bài** (FNSPI
 ## 2. Giới thiệu & Động lực
 
 - Thị trường tài chính sinh dữ liệu **khối lượng lớn, tốc độ cao, đa dạng** — bài toán Big Data điển hình.
-- Dự đoán **hướng giá** (lên/xuống) gần như bất khả thi (giả thuyết thị trường hiệu quả dạng yếu). Nhưng **rủi ro đuôi / sụp đổ** mang tín hiệu từ tin tức (tâm lý, sự kiện, lan truyền) → khả thi hơn.
+- Dự đoán **hướng giá** (lên/xuống) gần như bất khả thi (giả thuyết thị trường hiệu quả dạng yếu). Nhưng **rủi ro đuôi / crash** mang tín hiệu từ tin tức (tâm lý, sự kiện, lan truyền) → khả thi hơn.
 - Ý tưởng cốt lõi: thay vì huấn luyện mô hình dự báo, ta để **LLM suy luận** về quan hệ nhân quả giữa các thực thể tin tức và danh mục, có **bộ nhớ theo thời gian** (tác động xấu lưu lại và phân rã dần).
 
-**Use case:** cảnh báo sớm rủi ro sụp đổ danh mục cho nhà đầu tư/quản trị rủi ro — một advisory hằng ngày, không phải lệnh giao dịch.
+**Use case:** cảnh báo sớm rủi ro crash danh mục cho nhà đầu tư/quản trị rủi ro — một advisory hằng ngày, không phải lệnh giao dịch.
 
 ---
 
@@ -55,7 +55,7 @@ Trọng tâm Big Data: xử lý nguồn tin **23 GB / 15,7 triệu bài** (FNSPI
 - **Volume (Khối lượng):** nguồn 23 GB / 15,7 triệu bài; corpus 12 GB / 4,5 triệu bài.
 - **Velocity (Tốc độ):** luồng tin trực tiếp ~500 tin/ngày, daemon cập nhật mỗi 60 giây, Spark Structured Streaming.
 - **Variety (Đa dạng):** tin công ty, vĩ mô, crypto, thế giới; giá; nhiều nguồn (FNSPID, RSS, yfinance).
-- **Value (Giá trị):** advisory cảnh báo sụp đổ + ứng dụng web triển khai thực.
+- **Value (Giá trị):** advisory cảnh báo crash + ứng dụng web triển khai thực.
 
 ### 4.3 Phân biệt quan trọng: Hiển thị ≠ Dự đoán
 - Feed hiển thị 4 nhóm tin (🏢 công ty, 🌐 vĩ mô, ₿ crypto, 🌍 thế giới).
@@ -68,7 +68,7 @@ Trọng tâm Big Data: xử lý nguồn tin **23 GB / 15,7 triệu bài** (FNSPI
 1. **Brainstorm:** LLM đọc tin trong ngày → trích **đồ thị tác động** (cạnh "X tác động ±Y", trọng số [0,1]).
 2. **Memory (Bộ nhớ phân rã):** cập nhật bộ nhớ với cạnh mới; tác động cũ **phân rã theo hàm mũ** (λ) → tin xấu vẫn nâng rủi ro nhiều ngày, rồi nhạt dần ("temporal").
 3. **Attention (PageRank):** cắt tỉa đồ thị gộp xuống *top-k* cạnh gần danh mục nhất.
-4. **Reason:** LLM suy luận trên đồ thị con + tóm tắt bộ nhớ → **xác suất sụp đổ**.
+4. **Reason:** LLM suy luận trên đồ thị con + tóm tắt bộ nhớ → **xác suất crash**.
 
 > Mô hình **không bao giờ được huấn luyện** — nó suy luận. Chỉ một **meta-learner nhỏ** học trên các đặc trưng dẫn xuất; giá cung cấp nhãn.
 
@@ -148,7 +148,7 @@ Kỹ thuật: **stream-and-filter** (không lưu file thô 23 GB), **đọc theo
 
 **Kết luận phần này:** số rigorous đại diện là **toàn corpus 0.615 → 0.652 (+0.037, p=0.047)**; COVID 0.785/0.847 là **cận-trên best-case** một cú panic. Giá trị công đoạn corpus = trình diễn Big Data quy mô lớn + xác nhận RAG có ý nghĩa trên chuỗi 8 năm.
 
-### 9.3 Đánh giá liên tục theo độ sâu sụp đổ (severity — trung thực hơn)
+### 9.3 Đánh giá liên tục theo độ sâu crash (severity — trung thực hơn)
 AUROC nhị phân chỉ dùng ~78 ngày crash. Thước đo trung thực hơn: tương quan giữa **crash_prob dự đoán** và **độ sâu sụt giá 3 ngày thực tế** trên **TOÀN bộ 1.860 ngày** (không chỉ ngày crash).
 
 | | Spearman(crash_prob, fwd_ret) | p-value | Pearson |
@@ -181,7 +181,7 @@ Tương quan **âm và có ý nghĩa** ở cả hai → **prob cao hơn ⇒ sụ
 
 ## 11. Kết luận & Hướng phát triển
 
-- **Kết luận:** TRR zero-shot + RAG dự đoán được rủi ro sụp đổ danh mục từ tin tức với AUROC tốt ở cửa sổ khủng hoảng; **RAG là cải thiện ổn định**. Hệ thống xử lý nguồn 23 GB bằng kỹ thuật stream-index-select và phân tán Spark + Kaggle.
+- **Kết luận:** TRR zero-shot + RAG dự đoán được rủi ro crash danh mục từ tin tức với AUROC tốt ở cửa sổ khủng hoảng; **RAG là cải thiện ổn định**. Hệ thống xử lý nguồn 23 GB bằng kỹ thuật stream-index-select và phân tán Spark + Kaggle.
 - **Hướng phát triển:** (1) cluster Spark/HDFS nhiều máy thật; (2) corpus đa nguồn (mạng xã hội, filing); (3) hiệu chỉnh xác suất & ngưỡng theo chi phí; (4) mở rộng danh mục & đa tài sản.
 
 ---

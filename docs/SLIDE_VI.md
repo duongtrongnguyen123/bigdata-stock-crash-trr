@@ -24,14 +24,14 @@
 
 ### SLIDE 1 — Trang bìa
 **② Nội dung**
-- **Tiêu đề lớn:** Dự đoán Sụp đổ Giá Cổ phiếu bằng Suy luận Quan hệ theo Thời gian của LLM
+- **Tiêu đề lớn:** Dự đoán Crash Giá Cổ phiếu bằng Suy luận Quan hệ theo Thời gian của LLM
 - **Phụ đề:** Đồ án Big Data · phỏng theo arXiv:2410.17266
 - Nhóm: [TÊN NHÓM] · Thành viên: [TÊN] · GVHD: [TÊN GV] · [HỌC KỲ/NĂM]
 
 **🎨 Hình ảnh — PROMPT vẽ ảnh nền:**
 > "Ảnh bìa tối giản, nền trắng-xám gradient nhẹ. Bên phải: biểu đồ nến chứng khoán màu đỏ đang lao dốc mạnh, chồng mờ lên là một mạng nơ-ron/đồ thị node phát sáng màu xanh lá (tượng trưng LLM đọc tin). Phong cách phẳng (flat), hiện đại, chuyên nghiệp, không chữ trong ảnh."
 
-**🎤 Ghi chú:** "Hệ thống để LLM ĐỌC TIN TỨC và CẢNH BÁO sụp đổ danh mục — một bài toán Big Data thực tế." (30 giây)
+**🎤 Ghi chú:** "Hệ thống để LLM ĐỌC TIN TỨC và CẢNH BÁO crash danh mục — một bài toán Big Data thực tế." (30 giây)
 
 ---
 
@@ -39,13 +39,13 @@
 **② Nội dung**
 - Thị trường = dữ liệu **khối lượng lớn, tốc độ cao, đa dạng** → đúng bài toán Big Data.
 - Dự đoán **hướng giá** ≈ bất khả thi (thị trường hiệu quả dạng yếu).
-- Nhưng **rủi ro sụp đổ (crash)** mang tín hiệu rõ từ TIN TỨC (tâm lý, sự kiện, lan truyền).
+- Nhưng **rủi ro crash** mang tín hiệu rõ từ TIN TỨC (tâm lý, sự kiện, lan truyền).
 - **Use case:** cảnh báo sớm rủi ro — advisory cho nhà đầu tư / quản trị rủi ro (không phải lệnh mua–bán).
 
 **🎨 Hình ảnh — sơ đồ so sánh 2 cột (vẽ bằng khối hộp + icon):**
-> Hai thẻ cạnh nhau. Thẻ TRÁI viền đỏ, tiêu đề "Hướng giá (lên/xuống)", icon xúc xắc 🎲, nhãn "≈ Ngẫu nhiên (EMH)". Thẻ PHẢI viền xanh lá, tiêu đề "Rủi ro sụp đổ (tail-risk)", icon khiên/cảnh báo 🛡️, nhãn "✅ Có tín hiệu từ tin tức". Mũi tên lớn từ phải chỉ tới chữ "Mục tiêu của đồ án".
+> Hai thẻ cạnh nhau. Thẻ TRÁI viền đỏ, tiêu đề "Hướng giá (lên/xuống)", icon xúc xắc 🎲, nhãn "≈ Ngẫu nhiên (EMH)". Thẻ PHẢI viền xanh lá, tiêu đề "Rủi ro crash (tail-risk)", icon khiên/cảnh báo 🛡️, nhãn "✅ Có tín hiệu từ tin tức". Mũi tên lớn từ phải chỉ tới chữ "Mục tiêu của đồ án".
 
-**🎤 Ghi chú:** Nhấn: "Ta KHÔNG đoán giá lên/xuống — ta đoán XÁC SUẤT SỤP ĐỔ."
+**🎤 Ghi chú:** Nhấn: "Ta KHÔNG đoán giá lên/xuống — ta đoán XÁC SUẤT CRASH."
 
 ---
 
@@ -81,7 +81,7 @@
 - **1. Brainstorm:** tin → đồ thị tác động ("X tác động ±Y", có trọng số).
 - **2. Memory:** bộ nhớ phân rã `R = exp(−t·λ)` — tin xấu nhạt dần theo thời gian.
 - **3. Attention:** PageRank cắt tỉa xuống top-k cạnh gần danh mục nhất.
-- **4. Reason:** LLM suy luận trên đồ thị con → xác suất sụp đổ.
+- **4. Reason:** LLM suy luận trên đồ thị con → xác suất crash.
 
 **🎨 Hình ảnh — sơ đồ pipeline 4 khối nối tiếp + vòng lặp bộ nhớ:**
 > 4 hộp bo góc xếp ngang, mỗi hộp 1 màu pastel + icon: Brainstorm (🧠 đồ thị node), Memory (⏳ đường cong phân rã exp), Attention (🔍 đồ thị bị tỉa bớt), Reason (🤖 → gauge %). Mũi tên thẳng nối 4 hộp. Thêm **một mũi tên cong** từ Memory vòng lại đầu vào ngày kế tiếp, nhãn "mang sang ngày sau". Dưới Memory vẽ mini-chart đường cong giảm dần (trục x = ngày, y = độ liên quan).
@@ -124,7 +124,7 @@
 - **Volume:** 23 GB / 15,7 triệu bài → 12 GB / 4,5 triệu bài.
 - **Velocity:** luồng trực tiếp ~500 tin/ngày, cập nhật 60 giây, Spark Streaming.
 - **Variety:** tin công ty, vĩ mô, crypto, thế giới; giá; nhiều nguồn.
-- **Value:** advisory cảnh báo sụp đổ + web app triển khai thật.
+- **Value:** advisory cảnh báo crash + web app triển khai thật.
 - *(Veracity — chữ V thứ 5, hay bị hỏi):* khử trùng lặp + lọc theo danh mục + **embargo 3 ngày** (đảm bảo nhân quả, không rò rỉ tương lai).
 
 **🎨 Hình ảnh — lưới 2×2 thẻ (4 ô V), mỗi ô 1 icon + số:**
@@ -251,7 +251,7 @@
 
 ### SLIDE 17 — Kết luận & Hướng phát triển
 **② Nội dung**
-- **Kết luận:** TRR zero-shot + RAG dự đoán rủi ro sụp đổ từ tin tức (AUROC tốt ở cửa sổ khủng hoảng); **RAG cải thiện ổn định**; xử lý nguồn 23 GB bằng stream-index-select + Spark + pool GPU phân tán.
+- **Kết luận:** TRR zero-shot + RAG dự đoán rủi ro crash từ tin tức (AUROC tốt ở cửa sổ khủng hoảng); **RAG cải thiện ổn định**; xử lý nguồn 23 GB bằng stream-index-select + Spark + pool GPU phân tán.
 - **Hướng phát triển:** cluster Spark/HDFS nhiều máy thật; corpus đa nguồn (mạng xã hội, filing); hiệu chỉnh xác suất & ngưỡng theo chi phí; mở rộng đa tài sản.
 
 **🎨 Hình ảnh — sơ đồ tổng kết pipeline end-to-end (1 dải ngang):**

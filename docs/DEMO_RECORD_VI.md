@@ -15,10 +15,10 @@ curl -sI http://localhost:8501 | head -1     # mong đợi 200
 ## Kịch bản theo mốc thời gian (hành động · lời thoại)
 
 **0:00–0:08 — Mở đầu** *(ở tab 🔴 Live & Advisory)*
-> "Đây là hệ thống dự đoán rủi ro sụp đổ cổ phiếu: một LLM đọc tin tài chính và cảnh báo. Trang web có 3 phần."
+> "Đây là hệ thống dự đoán rủi ro crash cổ phiếu: một LLM đọc tin tài chính và cảnh báo. Trang web có 3 phần."
 
 **0:08–0:30 — Daily advisory** *(trỏ chuột vào gauge + mức Risk)*
-> "Đây là dự đoán chính thức: mô hình Qwen 32B chạy mỗi ngày, đưa ra **xác suất sụp đổ trong 3 ngày tới**, mức rủi ro, và các cổ phiếu rủi ro nhất kèm lý do."
+> "Đây là dự đoán chính thức: mô hình Qwen 32B chạy mỗi ngày, đưa ra **xác suất crash trong 3 ngày tới**, mức rủi ro, và các cổ phiếu rủi ro nhất kèm lý do."
 
 **0:30–0:48 — Live monitor + feed** *(kéo chuột xuống chậm)*
 > "Phần này tóm tắt **tin trực tiếp bằng LLM 7B** chạy nền — cập nhật theo dòng tin. Bên dưới là feed 50 tin mới nhất; bấm **Show 50 more** để xem thêm."

@@ -5,11 +5,11 @@
 ---
 
 ## 0. Mở đầu (10s)
-> "Đây là web demo của hệ thống: một **LLM đọc tin tài chính** và **cảnh báo rủi ro sụp đổ** danh mục. Có 3 tab: Trực tiếp, Nghiên cứu, và Cách hoạt động."
+> "Đây là web demo của hệ thống: một **LLM đọc tin tài chính** và **cảnh báo rủi ro crash** danh mục. Có 3 tab: Trực tiếp, Nghiên cứu, và Cách hoạt động."
 
 ## 1. Tab 🔴 Live & Advisory (35s)
 **Chỉ phần "Daily advisory" (trên cùng):**
-> "Đây là **dự đoán chính thức**: mô hình 32B chạy mỗi ngày, đưa ra **xác suất sụp đổ trong 3 ngày tới** và mức rủi ro (HIGH/ELEVATED/LOW), kèm các cổ phiếu rủi ro nhất và lý do."
+> "Đây là **dự đoán chính thức**: mô hình 32B chạy mỗi ngày, đưa ra **xác suất crash trong 3 ngày tới** và mức rủi ro (HIGH/ELEVATED/LOW), kèm các cổ phiếu rủi ro nhất và lý do."
 
 **Kéo xuống "Live market monitor":**
 > "Phần này **giám sát + tóm tắt tin trực tiếp** bằng LLM 7B chạy nền — **mô tả** tình hình hiện tại, *không* phải dự đoán. Tin cập nhật từng phút, ưu tiên tin mới nhất."
@@ -20,7 +20,7 @@
 > 💡 Câu chốt (nếu được hỏi): "**Hiển thị ≠ Dự đoán** — feed hiện 4 nhóm tin, nhưng dự đoán chỉ dùng tin công ty + vĩ mô."
 
 ## 2. Tab 📊 Research & Backtest (25s)
-> "Đây là nơi có **số liệu nghiêm túc**: backtest trên dữ liệu lịch sử **có nhãn**. AUROC dự đoán sụp đổ — cửa sổ COVID đạt **0.785, có RAG 0.847**. Kèm biểu đồ đường vốn, hiệu chỉnh xác suất."
+> "Đây là nơi có **số liệu nghiêm túc**: backtest trên dữ liệu lịch sử **có nhãn**. AUROC dự đoán crash — cửa sổ COVID đạt **0.785, có RAG 0.847**. Kèm biểu đồ đường vốn, hiệu chỉnh xác suất."
 
 > 💡 Câu chốt: "**Live = chứng minh triển khai** (tin chưa có nhãn); **Research = chứng minh độ chính xác** (dữ liệu có nhãn)."
 
