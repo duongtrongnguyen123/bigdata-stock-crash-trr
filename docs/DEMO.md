@@ -93,3 +93,15 @@ Kaggle outputs."
   unlabeled, so it demonstrates *runnability*, NOT that the 0.78 AUROC holds live.
 - One line: "We prove the method works on labeled historical data; the live
   monitor proves it deploys."
+
+## Optional — continuous live daemon (real-time, local)
+Run a background loop that fetches yfinance prices+news every minute, keeps a
+rolling 7-day window (TRR's measured memory horizon), and runs TRR each time new
+headlines arrive; the webapp auto-displays its latest signal:
+```bash
+.venv/bin/python -m scripts.live_daemon --poll 60 --backend mock      # instant
+.venv/bin/python -m scripts.live_daemon --poll 60 --backend 7b        # local Qwen-7B on the 2060
+```
+Retention is in MINUTES (`--retain-min`, default 10080 = 7 days). Do NOT set it to
+a few minutes — TRR's temporal memory needs ~5 trading days; short retention
+discards the multi-day signal.

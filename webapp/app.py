@@ -142,7 +142,9 @@ _lc2.caption("The panel below fetches live data automatically and updates itself
 def _live_panel():
     from webapp import live as _live
     try:
-        snap = _live.live_snapshot(use_local_7b=False)   # instant heuristic for auto-loop
+        snap = _live.read_daemon_snapshot()              # prefer the live daemon if running
+        if snap is None:
+            snap = _live.live_snapshot(use_local_7b=False)  # else fetch inline (instant heuristic)
         sig = snap["signal"]
         prob = sig["crash_prob"]
         st.metric("🔴 LIVE crash probability", f"{prob:.0%}",

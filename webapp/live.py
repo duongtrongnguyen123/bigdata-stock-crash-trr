@@ -97,6 +97,28 @@ def run_live(headlines, use_local_7b: bool = False):
     }
 
 
+def read_daemon_snapshot(max_age_s: int = 300):
+    """If scripts.live_daemon is running, return its latest signal+prices snapshot
+    (so the heavy 7B can run continuously in the daemon and the UI just displays
+    it). Returns None if no fresh daemon output exists."""
+    import json
+    import os
+    sp, pp = "data/live/signal.json", "data/live/prices.json"
+    if not os.path.exists(sp):
+        return None
+    try:
+        sig = json.load(open(sp))
+        t = datetime.fromisoformat(sig["asof"])
+        if (datetime.now(timezone.utc) - t).total_seconds() > max_age_s:
+            return None
+        pr = json.load(open(pp)) if os.path.exists(pp) else {"prices": {}, "portfolio_move": 0.0}
+        return {"signal": sig, "prices": pr.get("prices", {}),
+                "portfolio_move": pr.get("portfolio_move", 0.0),
+                "headlines": [], "source": "daemon"}
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def live_snapshot(use_local_7b: bool = False):
     """One call -> everything the live monitor needs."""
     heads = fetch_live_headlines()
