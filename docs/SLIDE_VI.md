@@ -103,12 +103,13 @@
 
 ---
 
-### SLIDE 7 — Dữ liệu
+### SLIDE 7 — Dữ liệu (2 nguồn tin lịch sử)
 **② Nội dung**
-- **FNSPID:** 23 GB thô, **15,7 triệu bài**, 4.775 mã, 1999–2023.
-- **Corpus đã lọc 2016–2023:** **4.500.216 bài / 12 GB**.
-- **Giá OHLCV:** 6 mã, 2.012 ngày giao dịch → sinh nhãn crash.
-- **Tin trực tiếp:** ~500 tin/ngày (yfinance + Google News RSS).
+- **Analyst-ratings (cũ, gọn):** 3 file ~886 MB → lọc 6 mã = **9.872 dòng** → tạo **số headline 0.785/0.847/0.710**.
+- **FNSPID (mới, lớn):** 23 GB / **15,7 triệu bài** → corpus **12 GB / 4,5 triệu** → mở rộng Big Data (0.615/0.652).
+- **Giá OHLCV:** 6 mã, 2.012 ngày → sinh nhãn crash.
+- **Tin trực tiếp:** ~500 tin/ngày (yfinance + Google News RSS) → triển khai live.
+- *Bài học:* nguồn lớn KHÔNG vượt bộ nhỏ đã tuyển khớp danh mục.
 
 **🎨 Hình ảnh — BIỂU ĐỒ CỘT (bar chart) số bài theo năm:**
 > Bar chart dọc, màu xanh lá. Trục X = năm; Trục Y = số bài (triệu/nghìn). Dữ liệu thật (số bài corpus): 2016=817.956; 2017=515.523; 2018=698.590; 2019=700.151; 2020=351.832; 2021=181.623; 2022=280.354; 2023=954.117. Tiêu đề chart: "Số bài tin trong corpus 2016–2023 (tổng 4,5 triệu)". Ghi nhãn giá trị trên mỗi cột.

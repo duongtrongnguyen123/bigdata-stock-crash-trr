@@ -40,10 +40,16 @@ Trọng tâm Big Data: xử lý nguồn tin **23 GB / 15,7 triệu bài** (FNSPI
 ### 4.1 Nguồn dữ liệu
 | Nguồn | Vai trò | Quy mô |
 |---|---|---|
-| **FNSPID** (tin tài chính) | corpus huấn-luyện-RAG/suy luận lịch sử | 23 GB thô, 15,7 triệu bài, 4.775 mã, 1999–2023 |
-| **Corpus đã lọc 2016–2023** | hồ dữ liệu cục bộ | **4.500.216 bài, 12 GB** |
+| **Kaggle analyst-ratings + partner-headlines** (3 file) | Tin lịch sử cho **kết quả headline** (COVID 0.785/0.847; rộng 0.710) | ~886 MB, ~1,4 triệu+ headline → lọc 6 mã: **9.872 dòng** |
+| **FNSPID** (tin tài chính) | Mở rộng quy mô Big Data | 23 GB thô, 15,7 triệu bài, 4.775 mã, 1999–2023 |
+| **Corpus FNSPID đã lọc 2016–2023** | bể RAG/suy luận quy mô lớn (kết quả 0.615/0.652) | **4.500.216 bài, 12 GB** |
 | **Giá OHLCV** (yfinance) | sinh **nhãn** crash | 6 mã, 2.012 ngày giao dịch |
 | **Tin trực tiếp** (yfinance + Google News RSS) | triển khai live (không nhãn) | ~500 tin/ngày |
+
+> **Lưu ý quan trọng — hai nguồn tin lịch sử riêng biệt:**
+> (1) **Bộ analyst-ratings (cũ, gọn)** → lọc còn 9.872 dòng cho 6 mã → **tạo ra số headline 0.785/0.847/0.710**.
+> (2) **FNSPID (mới, lớn)** → corpus 12 GB/4,5 triệu → phần *mở rộng Big Data* → 0.615/0.652.
+> Bài học (§9.2): nguồn lớn KHÔNG vượt bộ nhỏ đã được tuyển khớp danh mục.
 
 ### 4.2 Bốn chữ V của Big Data
 - **Volume (Khối lượng):** nguồn 23 GB / 15,7 triệu bài; corpus 12 GB / 4,5 triệu bài.
@@ -114,7 +120,7 @@ Kỹ thuật: **stream-and-filter** (không lưu file thô 23 GB), **đọc theo
 
 ## 9. Thực nghiệm & Kết quả
 
-### 9.1 Kết quả đã có
+### 9.1 Kết quả đã có (nguồn tin = **bộ analyst-ratings**, không phải FNSPID)
 | Thiết lập | AUROC | Ghi chú |
 |---|---|---|
 | COVID (2019-06…2020-06), base | **0.785** | 343 ngày, 14 crash |

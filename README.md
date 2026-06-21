@@ -54,13 +54,15 @@ market efficiency, while crash risk carries a real signal from news.
 
 ## Headline results (crash AUROC)
 
-| Setup | AUROC |
-|---|---|
-| Stock COVID crash window | **0.785** (+RAG **0.847**) |
-| Stock broad 2016–2020 | **0.710** |
-| RAG lift (large-N) | **+0.074 (p = 0.009)** |
-| news-volume baseline | ≈ 0.50 (signal comes from reasoning, not headline counts) |
-| Full corpus 2016–2023 (portfolio-filtered) | base **0.615** / RAG **0.652** (news-vol 0.662) |
+Two separate historical news sources: the compact **Kaggle analyst-ratings** bundle (9,872 rows, 6 tickers) produced the headline numbers; the **FNSPID** corpus (12 GB / 4.5M) is the big-data scale-up.
+
+| Setup | News source | AUROC |
+|---|---|---|
+| Stock COVID crash window | analyst-ratings | **0.785** (+RAG **0.847**) |
+| Stock broad 2016–2020 | analyst-ratings | **0.710** |
+| RAG lift (large-N) | analyst-ratings | **+0.074 (p = 0.009)** |
+| news-volume baseline | analyst-ratings | ≈ 0.50 (signal is reasoning, not headline counts) |
+| Full corpus 2016–2023 | FNSPID (portfolio-filtered) | base **0.615** / RAG **0.652** (news-vol 0.662) |
 
 **Honest notes:** small-N is the real ceiling (14–82 crash days, ~4% base rate);
 direction/raw price ≈ chance (weak-form EMH); naively scaling to an *all-ticker*
