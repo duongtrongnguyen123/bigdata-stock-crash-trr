@@ -651,11 +651,15 @@ def build_animated_timeline_figure(df, title: str = "") -> go.Figure:
                         marker=dict(color="red", size=9, symbol="x"),
                         name="actual crash")
     fig.add_hline(y=0.5, line_dash="dot", line_color="#888")
+    # No in-plot title (it's rendered in Streamlit above the chart, so the
+    # Play/Pause buttons can't overlap it). Buttons sit in the top margin.
     fig.update_layout(
-        title=title or "Crash radar — animated replay", height=420,
+        height=420,
         yaxis=dict(range=[0, 1], title="crash probability"),
-        margin=dict(l=20, r=20, t=50, b=10),
-        updatemenus=[dict(type="buttons", showactive=False, x=0.0, y=1.15,
+        margin=dict(l=20, r=20, t=44, b=10),
+        updatemenus=[dict(type="buttons", showactive=False, direction="left",
+            x=0.0, xanchor="left", y=1.14, yanchor="top",
+            pad=dict(t=0, r=8, b=4), bgcolor="#ffffff", bordercolor="#e2e8f0",
             buttons=[
                 dict(label="▶ Play", method="animate",
                      args=[None, {"frame": {"duration": 80, "redraw": True},

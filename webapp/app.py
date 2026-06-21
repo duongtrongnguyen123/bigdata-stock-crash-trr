@@ -396,6 +396,7 @@ with tab_research:
         c2.metric("Days", summ["n_days"])
         c3.metric("Actual crash days", summ["n_true_crash"])
         c4.metric("AUROC", f"{summ['auroc']:.3f}" if summ.get("auroc") else "—")
+        st.markdown(f"**Crash radar — animated replay · {run['label']}**")
         st.plotly_chart(lib.build_animated_timeline_figure(df, run["label"]),
                         width="stretch")
         st.caption("▶ Press Play to replay the crash radar day by day.")
