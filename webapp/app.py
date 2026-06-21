@@ -170,6 +170,36 @@ with tab_live:
             except Exception as exc:  # noqa: BLE001
                 st.warning(f"7B run failed: {exc}")
 
+    st.markdown("---")
+    st.subheader("🔬 Try it — type a headline, watch TRR react")
+    st.caption("Type any market news; the pipeline extracts an impact graph and "
+               "predicts crash risk on YOUR input (heuristic MockLLM, instant).")
+    _txt = st.text_area("News headline(s), one per line",
+                        "Major exchange hacked; contagion fears; cascading "
+                        "liquidations hit BTC and ETH", height=70)
+    _assets = st.multiselect("Portfolio assets",
+                             ["AAPL", "AMZN", "GOOGL", "NVDA", "TSLA", "NFLX",
+                              "BTC", "ETH", "SOL", "BNB"], default=["BTC", "ETH"])
+    if st.button("⚡ Analyze"):
+        from datetime import datetime, timezone
+        from trr.schema import NewsItem
+        items = [NewsItem(id=f"u{i}", timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
+                          title=t.strip(), assets=_assets or ["BTC", "ETH"])
+                 for i, t in enumerate(_txt.splitlines()) if t.strip()]
+        if items:
+            d = lib.build_impact_graph_data(news_items=items)
+            cc1, cc2 = st.columns([1, 1.5])
+            with cc1:
+                st.plotly_chart(gauge(d["crash_prob"], "Crash prob (your input)"),
+                                width="stretch")
+            with cc2:
+                try:
+                    st.plotly_chart(lib.build_impact_graph_figure(d), width="stretch")
+                except Exception as exc:  # noqa: BLE001
+                    st.caption(f"graph: {exc}")
+            st.caption(f"{d['n_edges']} impact edges · rationale: "
+                       + str(d.get("rationale", ""))[:200])
+
 # ===========================================================================
 # TAB 2 — RESEARCH & BACKTEST
 # ===========================================================================
@@ -190,7 +220,9 @@ with tab_research:
         c2.metric("Days", summ["n_days"])
         c3.metric("Actual crash days", summ["n_true_crash"])
         c4.metric("AUROC", f"{summ['auroc']:.3f}" if summ.get("auroc") else "—")
-        st.plotly_chart(lib.build_timeline_figure(df, run["label"]), width="stretch")
+        st.plotly_chart(lib.build_animated_timeline_figure(df, run["label"]),
+                        width="stretch")
+        st.caption("▶ Press Play to replay the crash radar day by day.")
 
         with st.expander("🕸️ Live impact graph (Brainstorm → Attention, sample news)"):
             try:

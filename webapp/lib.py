@@ -282,7 +282,7 @@ def list_demo_days() -> list:
     return sorted(by_day, key=lambda d: (-len(by_day[d]), d))
 
 
-def build_impact_graph_data(day=None, top_k: int = 30) -> dict:
+def build_impact_graph_data(day=None, top_k: int = 30, news_items=None) -> dict:
     """Run the TRR Brainstorm phase (MockLLM) and return graph data for viz.
 
     Builds the directed impact graph for one demo day's news using
@@ -307,16 +307,18 @@ def build_impact_graph_data(day=None, top_k: int = 30) -> dict:
     from trr.reason import reason_crash
     from trr.schema import PORTFOLIO
 
-    by_day = _sample_news_by_day()
-    days = sorted(by_day)
-    if day is None:
-        # Default to the busiest day so the demo graph is non-trivial.
-        day = list_demo_days()[0]
-    elif day not in by_day:
-        # Tolerate a string/date that isn't present: fall back to the first day.
-        day = days[0]
-
-    day_news = by_day[day]
+    if news_items is not None:
+        # "Try it" mode: arbitrary user-typed headlines.
+        day_news = news_items
+    else:
+        by_day = _sample_news_by_day()
+        days = sorted(by_day)
+        if day is None:
+            # Default to the busiest day so the demo graph is non-trivial.
+            day = list_demo_days()[0]
+        elif day not in by_day:
+            day = days[0]
+        day_news = by_day[day]
     llm = MockLLM()
     graph = build_impact_graph(day_news, llm, PORTFOLIO)
     pruned = pagerank_prune(list(graph.edges), PORTFOLIO, top_k=top_k)
@@ -624,4 +626,40 @@ def build_backtest_figure(d: dict) -> go.Figure:
     fig.update_layout(title="Economic backtest — de-risk overlay vs buy & hold",
                       yaxis_title="growth of $1", height=360,
                       margin=dict(l=20, r=20, t=50, b=10))
+    return fig
+
+
+def build_animated_timeline_figure(df, title: str = "") -> go.Figure:
+    """Animated 'crash radar' replay: a Play button sweeps the crash-probability
+    line day by day, with actual crash days marked — watch risk rise into a crash.
+    """
+    dates = [str(d) for d in df.index]
+    y = [float(v) for v in df["crash_prob"]]
+    lab = list(df["label_true"]) if "label_true" in df.columns else [0] * len(y)
+    step = max(1, len(dates) // 120)  # cap frames for smooth in-browser playback
+    idxs = list(range(1, len(dates), step)) + [len(dates)]
+    frames = [go.Frame(name=str(i), data=[go.Scatter(
+        x=dates[:i], y=y[:i], mode="lines", line=dict(color="#c0392b", width=2))])
+        for i in idxs]
+    fig = go.Figure(
+        data=[go.Scatter(x=dates[:1], y=y[:1], mode="lines",
+                         line=dict(color="#c0392b", width=2), name="crash prob")],
+        frames=frames)
+    cr = [i for i, c in enumerate(lab) if c == 1]
+    if cr:
+        fig.add_scatter(x=[dates[i] for i in cr], y=[y[i] for i in cr], mode="markers",
+                        marker=dict(color="red", size=9, symbol="x"),
+                        name="actual crash")
+    fig.add_hline(y=0.5, line_dash="dot", line_color="#888")
+    fig.update_layout(
+        title=title or "Crash radar — animated replay", height=420,
+        yaxis=dict(range=[0, 1], title="crash probability"),
+        margin=dict(l=20, r=20, t=50, b=10),
+        updatemenus=[dict(type="buttons", showactive=False, x=0.0, y=1.15,
+            buttons=[
+                dict(label="▶ Play", method="animate",
+                     args=[None, {"frame": {"duration": 80, "redraw": True},
+                                  "fromcurrent": True}]),
+                dict(label="⏸ Pause", method="animate",
+                     args=[[None], {"frame": {"duration": 0}, "mode": "immediate"}])])])
     return fig
