@@ -22,7 +22,10 @@ OUT = os.path.join(ROOT, "kaggle/out_corpus")
 def _merge(prefix: str) -> pd.DataFrame:
     frames = []
     for d in sorted(glob.glob(os.path.join(OUT, f"{prefix}*"))):
-        f = os.path.join(d, "trr_predictions.csv")
+        # the kernel writes under the target-mode subdir (crash/)
+        f = os.path.join(d, "crash", "trr_predictions.csv")
+        if not os.path.exists(f):
+            f = os.path.join(d, "trr_predictions.csv")
         if os.path.exists(f):
             frames.append(pd.read_csv(f))
     if not frames:
