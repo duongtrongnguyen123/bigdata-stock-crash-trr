@@ -14,20 +14,34 @@ TICKERS = ["AAPL", "AMZN", "GOOGL", "NVDA", "TSLA", "NFLX"]
 # macro-light) — index/rate/vol tickers surface Fed, rates, geopolitics, market.
 MACRO = {"^GSPC": "MKT", "^IXIC": "MKT", "^VIX": "VIX", "^TNX": "RATES"}
 CRYPTO = {"BTC-USD": "BTC", "ETH-USD": "ETH"}  # crypto market news
+# Expanded universe for the DISPLAY feed (more live volume); prediction still uses
+# the core 6 (TICKERS). Fetched concurrently so latency stays low.
+FEED_TICKERS = ["AAPL", "AMZN", "GOOGL", "NVDA", "TSLA", "NFLX", "META", "MSFT",
+                "AMD", "INTC", "JPM", "BAC", "WMT", "DIS", "BA", "XOM", "KO",
+                "PFE", "NKE", "QCOM", "AVGO", "COST", "ADBE", "GS"]
+# Multiple RSS topic queries (world/macro/markets/crypto) for breadth.
+_RSS_QUERIES = {
+    "world politics OR geopolitics OR election OR war OR sanctions": "WORLD",
+    "federal reserve OR interest rates OR inflation OR recession": "MACRO:FED",
+    "stock market selloff OR rally OR crash OR volatility": "MACRO:MKT",
+    "cryptocurrency OR bitcoin OR ethereum regulation": "CRYPTO:NEWS",
+}
 
 
-def fetch_world_headlines(max_items: int = 15):
-    """World politics / events / geopolitics via Google News RSS (no API key)."""
+def _fetch_rss(query: str, tag: str, max_items: int = 12):
+    """One Google News RSS topic query -> NewsItems (no API key)."""
+    import urllib.parse
     import urllib.request
     import xml.etree.ElementTree as ET
     from email.utils import parsedate_to_datetime
     from trr.schema import NewsItem
-    url = ("https://news.google.com/rss/search?q=world+politics+OR+geopolitics+OR+"
-           "election+OR+war+OR+sanctions+when:2d&hl=en-US&gl=US&ceid=US:en")
+    url = ("https://news.google.com/rss/search?q="
+           + urllib.parse.quote(query + " when:2d")
+           + "&hl=en-US&gl=US&ceid=US:en")
     out = []
     try:
         raw = urllib.request.urlopen(url, timeout=15).read()
-        for it in ET.fromstring(raw).findall(".//item")[:max_items]:
+        for i, it in enumerate(ET.fromstring(raw).findall(".//item")[:max_items]):
             title = (it.findtext("title") or "").strip()
             if not title:
                 continue
@@ -36,10 +50,21 @@ def fetch_world_headlines(max_items: int = 15):
             except Exception:  # noqa: BLE001
                 ts = datetime.now(timezone.utc).replace(tzinfo=None)
             src = title.rsplit(" - ", 1)[-1] if " - " in title else "Google News"
-            out.append(NewsItem(id=f"world-{len(out)}", timestamp=ts,
-                                title=title, source=src, assets=["WORLD"]))
+            out.append(NewsItem(id=f"{tag}-{i}", timestamp=ts,
+                                title=title, source=src, assets=[tag]))
     except Exception:  # noqa: BLE001
         pass
+    return out
+
+
+def fetch_world_headlines(max_items: int = 12):
+    """World/macro/markets/crypto RSS across multiple queries, fetched CONCURRENTLY."""
+    from concurrent.futures import ThreadPoolExecutor
+    out = []
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        for res in ex.map(lambda kv: _fetch_rss(kv[0], kv[1], max_items),
+                          list(_RSS_QUERIES.items())):
+            out += res
     return out
 
 
@@ -51,24 +76,26 @@ def fetch_live_headlines(tickers=TICKERS, max_per: int = 6, include_macro: bool 
     and WORLD (politics/geopolitics via Google News RSS). Crypto/world default OFF
     for the prediction path (corpus is finance/macro); the display feed turns them ON.
     """
-    import yfinance as yf
-    from trr.schema import NewsItem
+    from concurrent.futures import ThreadPoolExecutor
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    items, seen = [], set()
     sources = (list(tickers) + (list(MACRO) if include_macro else [])
                + (list(CRYPTO) if include_crypto else []))
-    for t in sources:
+
+    def _fetch_one(t):
+        import yfinance as yf
+        from trr.schema import NewsItem
         try:
             news = getattr(yf.Ticker(t), "news", []) or []
         except Exception:  # noqa: BLE001
-            news = []
+            return []
+        tag = (f"MACRO:{MACRO[t]}" if t in MACRO else
+               f"CRYPTO:{CRYPTO[t]}" if t in CRYPTO else t)
+        out = []
         for i, it in enumerate(news[:max_per]):
             c = it.get("content", it) if isinstance(it, dict) else {}
             title = (c.get("title") or it.get("title") or "").strip()
-            if not title or title in seen:
+            if not title:
                 continue
-            seen.add(title)
-            # use the ARTICLE's real publish time so a multi-day window can form
             ts = now
             pub = c.get("pubDate") or c.get("displayTime")
             if pub:
@@ -76,18 +103,24 @@ def fetch_live_headlines(tickers=TICKERS, max_per: int = 6, include_macro: bool 
                     ts = datetime.fromisoformat(str(pub).replace("Z", "+00:00")).replace(tzinfo=None)
                 except ValueError:
                     pass
-            if t in MACRO:
-                tag = f"MACRO:{MACRO[t]}"
-            elif t in CRYPTO:
-                tag = f"CRYPTO:{CRYPTO[t]}"
-            else:
-                tag = t
             prov = c.get("provider")
-            pub = prov.get("displayName") if isinstance(prov, dict) else None
-            items.append(NewsItem(id=f"{t}-{i}", timestamp=ts, title=title,
-                                  source=pub or "Yahoo", assets=[tag]))
+            pubn = prov.get("displayName") if isinstance(prov, dict) else None
+            out.append(NewsItem(id=f"{t}-{i}", timestamp=ts, title=title,
+                                source=pubn or "Yahoo", assets=[tag]))
+        return out
+
+    # CONCURRENT I/O: fetch all tickers in parallel (latency = slowest source,
+    # not the sum) so the source set can scale without slowing the live refresh.
+    items, seen = [], set()
+    with ThreadPoolExecutor(max_workers=12) as ex:
+        for res in ex.map(_fetch_one, sources):
+            for it in res:
+                if it.title not in seen:
+                    seen.add(it.title); items.append(it)
     if include_world:
-        items += fetch_world_headlines()
+        for it in fetch_world_headlines():
+            if it.title not in seen:
+                seen.add(it.title); items.append(it)
     return items
 
 

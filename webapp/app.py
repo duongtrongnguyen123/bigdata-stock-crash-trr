@@ -233,8 +233,9 @@ with tab_live:
     def _news_feed():
         from webapp import live as _live
         try:
-            heads = _live.fetch_live_headlines(include_macro=True, include_crypto=True,
-                                               include_world=True, max_per=12)
+            heads = _live.fetch_live_headlines(tickers=_live.FEED_TICKERS,
+                                               include_macro=True, include_crypto=True,
+                                               include_world=True, max_per=10)
             # ACCUMULATE across refreshes: new headlines append into a persistent
             # store (keyed by title), newest kept on top, capped at 200.
             store = st.session_state.get("feed_store", {})
