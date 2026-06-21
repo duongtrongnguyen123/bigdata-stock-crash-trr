@@ -65,9 +65,9 @@ def _to_newsitems(rows: list[dict]):
     return items
 
 
-def tick(store: list[dict], retain_min: int, backend: str, force: bool):
+def tick(store: list[dict], retain_min: int, backend: str, force: bool, rag: bool = False):
     """One poll: fetch, merge, prune, (maybe) run model. Returns (store, ran)."""
-    from webapp.live import fetch_live_headlines, fetch_live_prices, run_live_window
+    from webapp.live import fetch_live_headlines, fetch_live_prices, run_live, run_live_window
     now = _now()
     # 1-2. fetch + merge new (dedup by ticker+title); keep the ARTICLE's pub time
     seen = {(r["ticker"], r["title"]) for r in store}
@@ -93,7 +93,10 @@ def tick(store: list[dict], retain_min: int, backend: str, force: bool):
     ran = False
     if fresh or force:
         items = _to_newsitems(store)
-        sig = run_live_window(items, use_local_7b=(backend == "7b"))  # full multi-day pipeline
+        if rag:  # single-step reasoning + analogues from the LABELED historical bank
+            sig = run_live(items, use_local_7b=(backend == "7b"), use_rag=True)
+        else:    # full multi-day pipeline (temporal decay across days)
+            sig = run_live_window(items, use_local_7b=(backend == "7b"))
         sig["portfolio_move"] = port_move
         sig["retained_news"] = len(store)
         with open(SIGNAL_PATH, "w") as f:
@@ -108,6 +111,7 @@ def main():
     ap.add_argument("--retain-min", type=int, default=7 * 24 * 60, help="retention (minutes; default 7 days)")
     ap.add_argument("--backend", choices=["mock", "7b"], default="mock")
     ap.add_argument("--force-every", type=int, default=15, help="run model every N polls even with no new news")
+    ap.add_argument("--rag", action="store_true", help="inject analogues from the labeled historical bank")
     ap.add_argument("--minutes", type=float, default=0, help="run for N minutes (0 = forever)")
     args = ap.parse_args()
 
@@ -122,7 +126,7 @@ def main():
         i += 1
         force = (i % max(1, args.force_every) == 0)
         try:
-            store, fresh, pruned, ran = tick(store, args.retain_min, args.backend, force)
+            store, fresh, pruned, ran = tick(store, args.retain_min, args.backend, force, rag=args.rag)
             _save_store(store)
             sig = json.load(open(SIGNAL_PATH)) if os.path.exists(SIGNAL_PATH) else {}
             print(f"[{datetime.now(timezone.utc):%H:%M:%S}] tick {i}: +{fresh} new "

@@ -44,7 +44,33 @@ class CausalRAG:
         norms = np.sqrt(m.multiply(m).sum(axis=1))
         norms[norms == 0] = 1.0
         self._matrix = m.multiply(1.0 / norms).tocsr()
+        self._vec = vec  # keep vectorizer so NEW (live) queries can be embedded
         return self
+
+    def fewshot_for_query(self, query_text: str, labels: list[int]) -> str:
+        """Live RAG: retrieve the most similar HISTORICAL days to a NEW query
+        (today's live news) from this fitted LABELED bank, and format their
+        realized outcomes as few-shot. Unlike fewshot(), the query is not in the
+        bank, so there is no embargo — the whole bank is past, labeled history.
+        """
+        if self._matrix is None or getattr(self, "_vec", None) is None:
+            return ""
+        q = self._vec.transform([query_text or "__empty__"]).astype(np.float32)
+        qn = np.sqrt(q.multiply(q).sum())
+        if qn == 0:
+            return ""
+        sims = np.asarray((self._matrix @ (q.multiply(1.0 / qn)).T).todense()).ravel()
+        order = np.argsort(-sims)[: self.k]
+        picks = [(j, float(sims[j])) for j in order if sims[j] >= self.min_sim]
+        if not picks:
+            return ""
+        n_crash = sum(1 for j, _ in picks if labels[j] == 1)
+        lines = [f"  - {self._dates[j]} (sim {s:.2f}): "
+                 f"{'CRASHED (next 3d)' if labels[j] == 1 else 'no crash'}"
+                 for j, s in picks]
+        return ("HISTORICAL ANALOGUES — the most similar LABELED past days to "
+                f"today's news ({n_crash}/{len(picks)} crashed):\n" + "\n".join(lines)
+                + "\nWeight these: if today resembles prior CRASH days, lean higher.\n")
 
     def analogue_crash_rate(self, day_idx: int, labels: list[int]) -> float:
         """Numeric meta-feature: the fraction of the retrieved similar PAST days

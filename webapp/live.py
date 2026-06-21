@@ -77,11 +77,35 @@ def _get_llm(use_local_7b: bool):
     return _LLM_CACHE["hf"], True
 
 
-def run_live(headlines, use_local_7b: bool = False):
+_RAG_BANK = {}
+
+
+def _get_rag_bank():
+    """Labeled historical analogue bank (FNSPID news days + realized crash labels)
+    for LIVE RAG — retrieve 'today looks like past day X, which crashed'."""
+    if "bank" not in _RAG_BANK:
+        try:
+            from trr.news import group_by_day, load_news
+            from trr.prices import crash_labels_daily
+            from trr.rag import CausalRAG, day_text
+            bd = group_by_day(load_news("data/fnspid/stocknews.csv"))
+            cl = crash_labels_daily("data/fnspid/prices", TICKERS)["crash"]
+            cl.index = [d for d in cl.index]
+            dates = sorted(bd)
+            texts = [day_text(bd[d]) for d in dates]
+            labels = [int(cl.get(d, 0)) for d in dates]
+            _RAG_BANK["bank"] = (CausalRAG(k=5).fit(texts, dates), labels)
+        except Exception:  # noqa: BLE001
+            _RAG_BANK["bank"] = (None, [])
+    return _RAG_BANK["bank"]
+
+
+def run_live(headlines, use_local_7b: bool = False, use_rag: bool = False):
     """Run one TRR step over the live headlines -> crash_prob, edges, rationale.
 
     use_local_7b loads the local Qwen2.5-7B-AWQ on the 2060 (real LLM, ~1-3 min);
-    default MockLLM is instant. Budgets are capped for live latency.
+    default MockLLM is instant. use_rag retrieves analogues from the LABELED
+    historical bank and injects them into the reasoning context.
     """
     from trr.attention import pagerank_prune
     from trr.reason import reason_crash
@@ -90,7 +114,12 @@ def run_live(headlines, use_local_7b: bool = False):
     btok = 640 if real else 768
     edges = llm.brainstorm_multi([cap], TICKERS, max_new_tokens=btok)[0] if cap else []
     pruned = pagerank_prune(edges, TICKERS, top_k=30)
-    prob, rationale = (reason_crash(pruned, llm, universe=TICKERS)
+    ctx = ""
+    if use_rag:
+        bank, labels = _get_rag_bank()
+        if bank is not None:
+            ctx = bank.fewshot_for_query(" ".join(h.title for h in headlines), labels)
+    prob, rationale = (reason_crash(pruned, llm, context=ctx, universe=TICKERS)
                        if pruned else (0.0, "no impacts extracted from live news"))
     return {
         "crash_prob": float(prob),
@@ -101,7 +130,9 @@ def run_live(headlines, use_local_7b: bool = False):
                    "polarity": e.polarity, "weight": round(e.weight, 2)}
                   for e in pruned[:20]],
         "asof": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "backend": "Qwen2.5-7B-AWQ (local 2060)" if real else "MockLLM (heuristic)",
+        "backend": ("Qwen2.5-7B-AWQ (local 2060)" if real else "MockLLM (heuristic)")
+                   + (" +RAG" if (use_rag and ctx) else ""),
+        "rag_analogues": bool(ctx),
     }
 
 

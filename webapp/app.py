@@ -175,7 +175,7 @@ if st.button("↻ Run once with local Qwen-7B (real LLM on the 2060, ~1–3 min)
     with st.spinner("Loading 7B-AWQ + reasoning over live news…"):
         try:
             from webapp import live as _live
-            sig = _live.run_live(_live.fetch_live_headlines(), use_local_7b=True)
+            sig = _live.run_live(_live.fetch_live_headlines(), use_local_7b=True, use_rag=True)
             st.success(f"7B live crash_prob {sig['crash_prob']:.0%} · "
                        f"{sig['n_edges']} edges · {sig['backend']}")
             st.caption(sig["rationale"][:200])
