@@ -252,6 +252,23 @@ Lớp Batch đóng vai trò là nguồn dữ liệu gốc (source of truth). Nó
 
 Tại tầng Speed, mô hình khổng lồ được thay thế bằng phiên bản lượng tử hóa \textbf{Qwen2.5-7B-AWQ} cực nhẹ, chạy cục bộ mượt mà trên card RTX 2060 8GB (chỉ ăn $\sim 5.5$ GB VRAM). Kết quả $P(\text{crash})$ theo thời gian thực được đẩy trực tiếp xuống cấu trúc thư mục Data-lake dạng \textbf{Parquet phân vùng}. Tầng phục vụ \textbf{FastAPI} gọi dữ liệu từ kho này để biểu diễn trên giao diện \textbf{Streamlit}. Các endpoint API như \texttt{/crash-risk} đảm bảo khả năng mở rộng dịch vụ web cho các ứng dụng thứ ba.
 
+\subsection{Giao diện Demo (Web)}
+Toàn bộ hệ thống được đóng gói thành một ứng dụng web \textbf{Streamlit}. Tab \textit{Live \& Advisory} (Hình \ref{fig:web_live}) hiển thị xác suất crash thời gian thực kèm mức rủi ro và lý do; tab \textit{Research \& Backtest} (Hình \ref{fig:web_research}) trình bày các lần chạy lịch sử có nhãn với AUROC, dòng thời gian và phát lại crash radar theo ngày.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth,keepaspectratio]{../reports/figures/fig_web_live.png}
+    \caption{Giao diện \textit{Live \& Advisory}: gauge xác suất crash, mức rủi ro và lý do (mô hình Qwen2.5-32B, hiển thị giờ Việt Nam).}
+    \label{fig:web_live}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth,keepaspectratio]{../reports/figures/fig_web_research.png}
+    \caption{Giao diện \textit{Research \& Backtest}: một lần chạy có nhãn (COVID 2020) với AUROC, số ngày crash thực tế và phát lại crash radar theo từng ngày.}
+    \label{fig:web_research}
+\end{figure}
+
 \section{Khối lượng Dữ liệu \& Tiền xử lý (Big Data Pipeline)}
 
 \subsection{Đặc tính Dữ liệu Khổng lồ}
