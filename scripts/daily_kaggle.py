@@ -37,18 +37,21 @@ def stage_data():
     import yfinance as yf
     from webapp.live import fetch_live_headlines
     os.makedirs(STAGE, exist_ok=True)
-    start = (datetime.now(timezone.utc) - timedelta(days=WINDOW_DAYS * 3)).strftime("%Y-%m-%d")
+    # Full-history prices so the RAG analogue bank (2016–2023 corpus days) gets
+    # correct crash labels AND the recent prediction window has prices.
     for t in TICKERS:
-        df = yf.download(t, start=start, progress=False, auto_adjust=True)
+        df = yf.download(t, start="2016-01-01", progress=False, auto_adjust=True)
         close = df["Close"]; close = close[t] if hasattr(close, "columns") else close
-        # top-level files (the kernel globs **/AAPL.csv) — avoids subdir/zip upload issues
         pd.DataFrame({"date": pd.to_datetime(df.index).strftime("%Y-%m-%d"),
                       "close": close.to_numpy().ravel()}).to_csv(
             f"{STAGE}/{t}.csv", index=False)
+    # News = full FNSPID corpus (the RAG lookback bank) + today's live headlines.
     heads = fetch_live_headlines(max_per=12)
     rows = [{"date": h.timestamp.strftime("%Y-%m-%d"), "title": h.title,
              "assets": h.assets[0], "source": "yfinance"} for h in heads]
-    pd.DataFrame(rows).to_csv(f"{STAGE}/stocknews.csv", index=False)
+    corpus = pd.read_csv("data/stockdata/stocknews_corpus.csv")
+    pd.concat([corpus, pd.DataFrame(rows)], ignore_index=True).to_csv(
+        f"{STAGE}/stocknews.csv", index=False)
     end = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     wstart = (datetime.now(timezone.utc) - timedelta(days=WINDOW_DAYS)).strftime("%Y-%m-%d")
     print(f"[daily-kaggle] staged {len(rows)} headlines + prices; window {wstart}..{end}")
@@ -80,6 +83,9 @@ def push_kernel(wstart, end):
     src = re.sub(r'DEFAULT_START, DEFAULT_END = .*',
                  f'DEFAULT_START, DEFAULT_END = "{wstart}", "{end}"', src)
     src = src.replace('"crash,direction"', '"crash"')
+    # Enable Causal RAG (case-based few-shot over the corpus lookback bank).
+    FUT = "from __future__ import annotations\n"
+    src = src.replace(FUT, FUT + 'import os as _os\n_os.environ["USE_RAG"] = "1"\n', 1)
     open(f"{PUSH}/daily_advisory.py", "w").write(src)
     meta = {"id": SLUG, "title": "daily-advisory-32b", "code_file": "daily_advisory.py",
             "language": "python", "kernel_type": "script", "is_private": True,
@@ -115,9 +121,20 @@ def _to_report(out):
         print("[daily-kaggle] no predictions"); return None
     d = pd.read_csv(p, index_col=0)
     last = d.iloc[-1]
-    sig = {"crash_prob": float(last["crash_prob"]), "edges": [],
+    # parse the per-day impact edges the kernel now serializes -> populate the
+    # advisory's exposed-assets / drivers / specific cautions.
+    edges = []
+    raw_edges = str(last.get("edges_json", "") or "")
+    if raw_edges and raw_edges != "nan":
+        try:
+            for s, o, pol, w in json.loads(raw_edges):
+                edges.append({"subject": s, "object": o,
+                              "polarity": pol, "weight": w})
+        except Exception:  # noqa: BLE001
+            edges = []
+    sig = {"crash_prob": float(last["crash_prob"]), "edges": edges,
            "rationale": str(last.get("rationale", "")),
-           "backend": "Qwen2.5-32B",
+           "backend": "Qwen2.5-32B (RAG)",
            "asof": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     adv = compose_advisory(sig)
     adv["n_headlines"] = int(last.get("n_news", 0))

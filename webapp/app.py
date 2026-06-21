@@ -173,7 +173,7 @@ with tab_live:
             lvl = adv["risk_level"]
             st.markdown(f"### Risk: <span style='color:{_RISK_COLOR.get(lvl,'#666')}'>"
                         f"{lvl}</span>", unsafe_allow_html=True)
-            st.caption(f"as of {_vn_iso(adv.get('asof','?'))} (giờ VN) · "
+            st.caption(f"as of {_vn_iso(adv.get('asof','?'))} · "
                        f"{str(adv.get('backend','?')).split(' (')[0]}")
         with col_a:
             if adv.get("at_risk_assets"):
@@ -241,9 +241,22 @@ with tab_live:
             st.markdown(
                 f"<span class='live-badge'><span class='live-dot'></span>LIVE</span> "
                 f"<span style='color:#64748b;font-size:0.82rem'>monitoring news · "
-                f"auto-refresh {_interval}s · updated {now} (giờ VN)</span>",
+                f"auto-refresh {_interval}s · updated {now}</span>",
                 unsafe_allow_html=True)
-            st.markdown(f"**📝 Live news summary (7B):** {summary}")
+            _mkt_label, _mkt_open = _live.market_status()
+            _mkt_c, _mkt_bg = (("#16a34a", "#ecfdf5") if _mkt_open
+                               else ("#dc2626", "#fef2f2"))
+            _mkt_msg = ("US market open" if _mkt_open
+                        else f"US market closed · {_mkt_label} — prices held at last close")
+            st.markdown(
+                f"<span style='display:inline-block;background:{_mkt_bg};color:{_mkt_c};"
+                f"border:1px solid {_mkt_c};border-radius:999px;padding:2px 11px;"
+                f"font-size:0.8rem;font-weight:700'>"
+                f"{'🟢' if _mkt_open else '🔴'} {_mkt_msg}</span>",
+                unsafe_allow_html=True)
+            _src_tag = ("7B" if "7B" in str(source) else
+                        "rule-based" if "rule" in str(source) else "live")
+            st.markdown(f"**📝 Live news summary ({_src_tag}):** {summary}")
             col = _stress_color.get(stress, "#475569")
             st.markdown(
                 f"News-stress: <b style='color:{col}'>{stress}</b> "
@@ -356,18 +369,6 @@ with tab_live:
 
     _news_feed()
 
-    if st.button("↻ Run once with local Qwen-7B + RAG (real LLM, ~1–3 min)"):
-        with st.spinner("Loading 7B-AWQ + reasoning over live news…"):
-            try:
-                from webapp import live as _live
-                sig = _live.run_live(_live.fetch_live_headlines(),
-                                     use_local_7b=True, use_rag=True)
-                st.success(f"7B crash_prob {sig['crash_prob']:.0%} · "
-                           f"{sig['n_edges']} edges · {sig['backend']}")
-                st.caption(sig["rationale"][:200])
-            except Exception as exc:  # noqa: BLE001
-                st.warning(f"7B run failed: {exc}")
-
     st.markdown("---")
     st.subheader("🔬 Try it — type a headline, watch TRR react")
     st.caption("Type any market news — the pipeline extracts an impact graph and gives "
@@ -386,7 +387,8 @@ with tab_live:
                           title=t.strip(), assets=_assets or ["BTC", "ETH"])
                  for i, t in enumerate(_txt.splitlines()) if t.strip()]
         if items:
-            d = lib.build_impact_graph_data(news_items=items)
+            d = lib.build_impact_graph_data(news_items=items,
+                                            portfolio=_assets or ["BTC", "ETH"])
             cc1, cc2 = st.columns([1, 1.5])
             with cc1:
                 st.plotly_chart(gauge(d["crash_prob"], "Crash prob (your input)"),

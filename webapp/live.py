@@ -317,21 +317,67 @@ def write_live_summary(use_llm: bool = True, items=None) -> dict:
     return out
 
 
-def read_live_summary(max_age_s: int = 3600):
-    """Web hook: read the daemon's cached summary (instant, no model load).
-    Returns None if missing; sets 'stale' if older than max_age_s."""
+# --- Cloud sync ----------------------------------------------------------
+# When the LOCAL daemon snapshot is stale (e.g. on Streamlit Cloud, which has
+# no daemon/GPU), read the freshest data from a secret Gist that the always-on
+# local daemon updates every ~60s (scripts/gist_sync.py). Staleness is decided
+# from each payload's own `asof`/`ts` (NOT file mtime), so it works on the cloud
+# where the committed files keep a recent mtime but old content.
+GIST_RAW = ("https://gist.githubusercontent.com/duongtrongnguyen123/"
+            "0c5ef7ebcd9d275798653fef36424b4b/raw/")
+
+
+def _age_s(asof_iso) -> float:
+    """Seconds since an ISO `asof`; huge if unparseable/missing."""
+    try:
+        t = datetime.fromisoformat(str(asof_iso))
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - t).total_seconds()
+    except Exception:  # noqa: BLE001
+        return 1e12
+
+
+def _gist_text(name: str, timeout: int = 8):
+    """Fetch a file from the synced gist (raw); None on any failure."""
+    import time as _t
+
+    try:
+        import requests
+        r = requests.get(GIST_RAW + name, timeout=timeout,
+                         params={"_": int(_t.time() // 60)})  # minute cache-buster
+        if r.status_code == 200:
+            return r.text
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+def read_live_summary(max_age_s: int = 600):
+    """Read the daemon's cached summary; if local is missing/stale, fall back to
+    the synced gist (so the cloud shows the always-on local 7B summary)."""
     import json
     import os
-    import time
 
-    if not os.path.exists(SUMMARY_PATH):
+    d = None
+    if os.path.exists(SUMMARY_PATH):
+        try:
+            d = json.load(open(SUMMARY_PATH))
+        except Exception:  # noqa: BLE001
+            d = None
+    if d is None or _age_s(d.get("asof")) > max_age_s:
+        txt = _gist_text("summary.json")
+        if txt:
+            try:
+                g = json.loads(txt)
+                if d is None or _age_s(g.get("asof")) < _age_s(d.get("asof")):
+                    d = g
+            except Exception:  # noqa: BLE001
+                pass
+    if d is None:
         return None
-    try:
-        d = json.load(open(SUMMARY_PATH))
-        d["stale"] = (time.time() - os.path.getmtime(SUMMARY_PATH)) > max_age_s
-        return d
-    except Exception:  # noqa: BLE001
-        return None
+    d["stale"] = _age_s(d.get("asof")) > max_age_s
+    return d
 
 
 # The daemon also writes prices + the rolling news store; the web reads those
@@ -340,33 +386,82 @@ PRICES_PATH = "data/live/prices.json"
 NEWS_PATH = "data/live/news.jsonl"
 
 
-def read_live_prices():
-    """Read the daemon's cached prices snapshot, or None if absent."""
+def market_status():
+    """US equity market status right now (regular hours, ET). Returns
+    (label, is_open). Holiday calendar is ignored — weekday + 9:30–16:00 only."""
+    from datetime import datetime
+    try:
+        from zoneinfo import ZoneInfo
+        now = datetime.now(ZoneInfo("America/New_York"))
+    except Exception:  # noqa: BLE001 — fallback to EDT (UTC-4)
+        from datetime import timedelta, timezone
+        now = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=-4)))
+    hm = now.hour * 60 + now.minute
+    if now.weekday() >= 5:
+        return ("weekend", False)
+    if hm < 9 * 60 + 30:
+        return ("pre-market", False)
+    if hm >= 16 * 60:
+        return ("after-hours", False)
+    return ("open", True)
+
+
+def read_live_prices(max_age_s: int = 900):
+    """Read the daemon's cached prices; fall back to the synced gist if stale."""
     import json
     import os
 
-    if not os.path.exists(PRICES_PATH):
-        return None
-    try:
-        return json.load(open(PRICES_PATH))     # {prices, portfolio_move, asof}
-    except Exception:  # noqa: BLE001
-        return None
+    d = None
+    if os.path.exists(PRICES_PATH):
+        try:
+            d = json.load(open(PRICES_PATH))     # {prices, portfolio_move, asof}
+        except Exception:  # noqa: BLE001
+            d = None
+    if d is None or _age_s(d.get("asof")) > max_age_s:
+        txt = _gist_text("prices.json")
+        if txt:
+            try:
+                g = json.loads(txt)
+                if d is None or _age_s(g.get("asof")) < _age_s(d.get("asof")):
+                    d = g
+            except Exception:  # noqa: BLE001
+                pass
+    return d
 
 
-def read_live_feed(limit: int = 500):
+def _feed_newest_age(lines) -> float:
+    """Seconds since the newest `ts` among the last ~80 jsonl lines."""
+    import json
+
+    mx = 0.0
+    for ln in lines[-80:]:
+        try:
+            mx = max(mx, float(json.loads(ln).get("ts", 0)))
+        except Exception:  # noqa: BLE001
+            pass
+    if not mx:
+        return 1e12
+    return datetime.now(timezone.utc).timestamp() - mx
+
+
+def read_live_feed(limit: int = 500, max_age_s: int = 1800):
     """Read the daemon's rolling news store (news.jsonl) as NewsItems, newest
-    first — so the web feed needs no live fetch."""
+    first; if local is missing/stale, fall back to the synced gist."""
     import json
     import os
 
     from trr.schema import NewsItem
-    if not os.path.exists(NEWS_PATH):
-        return []
+    lines = []
+    if os.path.exists(NEWS_PATH):
+        lines = [ln.strip() for ln in open(NEWS_PATH) if ln.strip()]
+    if not lines or _feed_newest_age(lines) > max_age_s:
+        txt = _gist_text("news.jsonl")
+        if txt:
+            glines = [ln.strip() for ln in txt.splitlines() if ln.strip()]
+            if glines and (not lines or _feed_newest_age(glines) < _feed_newest_age(lines)):
+                lines = glines
     rows = []
-    for line in open(NEWS_PATH):
-        line = line.strip()
-        if not line:
-            continue
+    for line in lines:
         try:
             r = json.loads(line)
             ts = datetime.fromtimestamp(r["ts"], timezone.utc).replace(tzinfo=None)

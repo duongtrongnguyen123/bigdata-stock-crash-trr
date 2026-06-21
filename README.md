@@ -19,7 +19,6 @@ market efficiency, while crash risk carries a real signal from news.
 | 📑 **Slides (PDF)** | [`docs/SLIDE_FINAL.pdf`](docs/SLIDE_FINAL.pdf) |
 | 🎥 **Demo video** | [▶ Watch on Google Drive](https://drive.google.com/file/d/1wn5p-PKhR9AFaDvI3taqRd1AVDMMN4LU/view) (preview below) |
 | 🌐 **Live web demo** | **https://bigdata-stock-crash-trr.streamlit.app** — Streamlit (Live & Advisory · Research & Backtest · How it works) |
-| 🎤 **Demo scripts** | [`docs/DEMO_VI.md`](docs/DEMO_VI.md) (talk) · [`docs/DEMO_RECORD_VI.md`](docs/DEMO_RECORD_VI.md) (recording) |
 | 📊 **Full results** | [`reports/RESULTS_TRR.md`](reports/RESULTS_TRR.md) |
 
 **Preview — click a cover to open the full PDF (in GitHub's PDF viewer):**
@@ -48,6 +47,20 @@ market efficiency, while crash risk carries a real signal from news.
 **Distributed processing:**
 - **Apache Spark** batch ETL: 12 GB corpus → **Parquet partitioned by year** (data-lake layout); 12 GB→718 MB in 101 s; queries read 4.5M rows in 2.4 s (~40×, partition-pruned). Same code runs on a cluster via `SPARK_MASTER=spark://…`.
 - **Distributed fan-out**: the 32B backtest splits into **40 shards** (20 base + 20 RAG) run in parallel on a free Kaggle GPU pool — one ~20-min wave vs ~5 h single-run (same result; same code runs on a paid cloud/HPC cluster).
+
+---
+
+## 📚 Datasets
+
+| Dataset | Role | Source |
+|---|---|---|
+| **FNSPID** (financial news, 1999–2023) | Big-data news corpus (23 GB / 15.7M → 12 GB / 4.5M articles) for the full-corpus backtest | [HuggingFace · Zihan1004/FNSPID](https://huggingface.co/datasets/Zihan1004/FNSPID) |
+| **Analyst-ratings / partner headlines** | Compact headline corpus for the COVID / broad results (→ 9,872 portfolio rows) | [Kaggle · massive-stock-news-analysis-db](https://www.kaggle.com/datasets/miguelaenlle/massive-stock-news-analysis-db-for-nlpbacktests) |
+| **Stock OHLCV** (daily) | Crash labels + price baselines for the 6 large-caps | [yfinance](https://github.com/ranaroussi/yfinance) (Yahoo Finance) |
+| **Crypto OHLCV** (5-min, 6 assets) | Crypto cross-asset experiments (~441k windows) | [Binance API](https://github.com/binance/binance-public-data) |
+| **Live news / prices** | Real-time monitor (deployment proof) | yfinance `.news` + [Google News RSS](https://news.google.com/) |
+
+Derived data (12 GB corpus, 1.9 GB SQLite index, Parquet lake, RAG slices) is **gitignored** — only the code that regenerates it is tracked (`scripts/fetch_fnspid.py`, `scripts/build_stock_data.py`, `trr/corpus.py`).
 
 ---
 

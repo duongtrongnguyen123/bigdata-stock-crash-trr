@@ -43,11 +43,6 @@ RUN_LABELS = {
     "main": "Main campaign run",
     "stock_base": "Stock TRR — base",
     "stock_rag": "Stock TRR — RAG few-shot",
-    "f1": "Fold 1",
-    "f2": "Fold 2",
-    "f3": "Fold 3",
-    "f4": "Fold 4",
-    "f5": "Fold 5",
 }
 
 
@@ -67,13 +62,14 @@ def list_prediction_runs() -> list[dict]:
     for name in os.listdir(KAGGLE_DIR):
         if not name.startswith("out_"):
             continue
+        slug = name[len("out_"):]
         path = os.path.join(KAGGLE_DIR, name, "crash", "trr_predictions.csv")
-        if os.path.isfile(path):
-            slug = name[len("out_"):]
+        # Only surface curated demo runs — skip experimental folds / orphan dirs.
+        if slug in RUN_LABELS and os.path.isfile(path):
             runs.append(
                 {
                     "slug": slug,
-                    "label": RUN_LABELS.get(slug, slug),
+                    "label": RUN_LABELS[slug],
                     "path": path,
                 }
             )
@@ -282,7 +278,8 @@ def list_demo_days() -> list:
     return sorted(by_day, key=lambda d: (-len(by_day[d]), d))
 
 
-def build_impact_graph_data(day=None, top_k: int = 30, news_items=None) -> dict:
+def build_impact_graph_data(day=None, top_k: int = 30, news_items=None,
+                            portfolio=None) -> dict:
     """Run the TRR Brainstorm phase (MockLLM) and return graph data for viz.
 
     Builds the directed impact graph for one demo day's news using
@@ -319,14 +316,15 @@ def build_impact_graph_data(day=None, top_k: int = 30, news_items=None) -> dict:
         elif day not in by_day:
             day = days[0]
         day_news = by_day[day]
+    pf = [a.upper() for a in portfolio] if portfolio else list(PORTFOLIO)
     llm = MockLLM()
-    graph = build_impact_graph(day_news, llm, PORTFOLIO)
-    pruned = pagerank_prune(list(graph.edges), PORTFOLIO, top_k=top_k)
+    graph = build_impact_graph(day_news, llm, pf)
+    pruned = pagerank_prune(list(graph.edges), pf, top_k=top_k)
 
     # Reason over the pruned subgraph for the headline crash probability.
-    crash_prob, rationale = reason_crash(pruned, llm, context="", universe=PORTFOLIO)
+    crash_prob, rationale = reason_crash(pruned, llm, context="", universe=pf)
 
-    portfolio_set = set(PORTFOLIO)
+    portfolio_set = set(pf)
     g = nx.DiGraph()
     for e in pruned:
         g.add_edge(e.subject, e.object, polarity=int(e.polarity), weight=float(e.weight))

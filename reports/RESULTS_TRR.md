@@ -37,17 +37,21 @@ Detail: §"Multi-window campaign", "Equities port", "RAG helps BEYOND COVID",
 
 | Source | Records | Raw size | Stored locally |
 |---|---|---|---|
-| FNSPID financial news | 15.7M raw → 40,778 (6 tickers) | **23.2 GB** | **3.6 MB** (filtered) |
+| FNSPID financial news | 15.7M raw → **4.5M articles** (2016–2023, all tickers + bodies) | **23.2 GB** | **12 GB corpus → 1.9 GB SQLite index → ~2 MB RAG slice** |
 | Crypto news (oliviervha) | 31,037 headlines | ~13 MB | ~13 MB |
 | Crypto 5-min OHLCV (Binance) | ~441k 5-min windows (6 assets) | ~193 MB | ~193 MB |
 | Reddit social posts | ~940k posts | ~426 MB | ~426 MB |
 | Stock prices (yfinance) | ~12k daily bars | <5 MB | <5 MB |
 
 **Be precise about volume (don't overclaim):**
-- The one genuinely large input is the **23.2 GB FNSPID** corpus, which is
-  **stream-filtered** (never fully downloaded or stored) down to the 6-ticker
-  **3.6 MB** slice — a legitimate process-don't-store big-data move (`scripts/fetch_fnspid.py`).
-- Everything **stored** is **medium data** (~640 MB total). We do **not** claim terabytes.
+- The one genuinely large input is the **23.2 GB FNSPID** corpus. It is
+  **stream-filtered in 100k-row chunks** (RAM-bounded — never loaded whole;
+  `scripts/fetch_fnspid.py`) into a **12 GB / 4.5M-article working corpus** kept on disk.
+- Storage cascade ("store enormous, serve tiny"): 12 GB corpus → date-indexed
+  **SQLite (1.9 GB, ~44 ms/day lookup)** → per-day **RAG slice (~2 MB)** fed to the LLM,
+  so LLM cost stays fixed regardless of corpus size.
+- We do **not** claim terabytes: raw source 23.2 GB; locally we keep ~14 GB
+  (12 GB corpus + 1.9 GB index). All derived data regenerates 100% from code.
 - **Verify the 23.2 GB without downloading:**
   `curl -sIL "https://huggingface.co/datasets/Zihan1004/FNSPID/resolve/main/Stock_news/nasdaq_exteral_data.csv"`
   → `Content-Length: 23232979597`.

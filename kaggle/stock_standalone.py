@@ -126,6 +126,7 @@ class Prediction:
     per_asset_direction: dict[str, int] = field(default_factory=dict)
     n_news: int = 0                    # news items considered this step
     n_edges: int = 0                   # impact edges in the pruned subgraph
+    edges_json: str = ""               # JSON of pruned edges [[subj,obj,pol,wt],...]
 
 # ===================== trr/llm.py =====================
 
@@ -1249,7 +1250,7 @@ class TRRPipeline:
         )
 
         # Phase B — sequential memory/attention to build each day's reason input.
-        tuples_list, contexts, n_edges = [], [], []
+        tuples_list, contexts, n_edges, edges_list = [], [], [], []
         for step, today_edges in enumerate(edges_per_day):
             self.memory.update(today_edges, step)
             decayed = self.memory.retrieve(step, self.lam)
@@ -1264,6 +1265,8 @@ class TRRPipeline:
                     ctx = block + ctx
             contexts.append(ctx)
             n_edges.append(len(pruned))
+            edges_list.append([[e.subject, e.object, e.polarity, round(e.weight, 3)]
+                               for e in pruned])
 
         # Phase B2 (optional) — RAG: prepend case-based few-shot (similar PAST
         # days + realized outcomes) to each day's context. Causal: the retriever
@@ -1325,12 +1328,13 @@ class TRRPipeline:
             universe=self.portfolio,
         )
         rows = []
-        for d, (prob, rationale), ne, dn in zip(dates, results, n_edges, day_news):
+        for d, (prob, rationale), ne, el, dn in zip(dates, results, n_edges, edges_list, day_news):
             ts = datetime(d.year, d.month, d.day)
             rows.append(Prediction(
                 timestamp=ts, crash_prob=prob,
                 label=int(prob >= self.label_threshold), rationale=rationale,
                 n_news=len(dn), n_edges=ne,
+                edges_json=json.dumps(el, separators=(",", ":")),
             ))
         return rows
 
@@ -1385,6 +1389,7 @@ class TRRPipeline:
                 "label": [p.label for p in rows],
                 "n_news": [p.n_news for p in rows],
                 "n_edges": [p.n_edges for p in rows],
+                "edges_json": [getattr(p, "edges_json", "") for p in rows],
                 "rationale": [p.rationale for p in rows],
             },
             index=pd.Index(list(dates), name="day"),

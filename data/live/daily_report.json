@@ -1,16 +1,44 @@
 {
-  "risk_level": "ELEVATED",
-  "crash_prob": 0.45,
+  "risk_level": "LOW",
+  "crash_prob": 0.15,
   "horizon": "next ~3 trading days",
-  "at_risk_assets": [],
-  "top_drivers": [],
-  "cautions": [
-    "Consider risk-reduction sizing if the signal persists over consecutive days (3-day horizon)."
+  "at_risk_assets": [
+    {
+      "ticker": "TSLA",
+      "exposure": 1.5
+    },
+    {
+      "ticker": "AAPL",
+      "exposure": 1.1
+    }
   ],
-  "rationale": "There are multiple negative impacts concentrated on TSLA and NVDA, with additional negative signals for AAPL and AMZN. While this indicates notable stress, it has not yet spread to a portfolio-wide contagion.",
-  "backend": "Qwen2.5-32B",
-  "asof": "2026-06-21T08:24:24+00:00",
+  "top_drivers": [
+    {
+      "subject": "SPCX, TSLA",
+      "object": "TSLA",
+      "polarity": -1,
+      "weight": 0.8
+    },
+    {
+      "subject": "SPACEX\u2019S 32% CRASH",
+      "object": "TSLA",
+      "polarity": -1,
+      "weight": 0.7
+    },
+    {
+      "subject": "APPLE",
+      "object": "AAPL",
+      "polarity": -1,
+      "weight": 0.6
+    }
+  ],
+  "cautions": [
+    "No systemic stress detected; routine monitoring."
+  ],
+  "rationale": "The news impacts include both positive and negative signals, but they are scattered and do not indicate systemic stress or contagion. The historical analogues also suggest a calm period without crashes.",
+  "backend": "Qwen2.5-32B (RAG)",
+  "asof": "2026-06-25T03:29:43+00:00",
   "disclaimer": "Research/analysis output \u2014 NOT financial advice.",
-  "n_headlines": 12,
-  "as_of_day": "2026-06-21"
+  "n_headlines": 22,
+  "as_of_day": "2026-06-25"
 }
