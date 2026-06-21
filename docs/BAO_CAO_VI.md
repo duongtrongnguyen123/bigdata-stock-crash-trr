@@ -12,7 +12,7 @@
 
 Trọng tâm Big Data: xử lý nguồn tin **23 GB / 15,7 triệu bài** (FNSPID) bằng kỹ thuật **stream-process, lập chỉ mục phân vùng, và chọn lọc bằng RAG**, kết hợp **tính toán phân tán** (Spark cho ETL, pool GPU Kaggle free-tier cho suy luận LLM).
 
-**Kết quả chính:** Cửa sổ khủng hoảng COVID đạt **AUROC 0.785** (có RAG **0.847**); giai đoạn rộng 2016–2020 đạt **0.710**. RAG là cải thiện ổn định và có ý nghĩa thống kê (+0.074, p=0.009 ở quy mô lớn). Mở rộng sang corpus toàn bộ 2016–2023 (lọc theo danh mục): base **0.615** / RAG **0.652** — hồi phục mạnh sau khi sửa lỗi chọn lọc, nhưng *không vượt* bộ tin bundled gốc (chi tiết §9.2).
+**Kết quả chính:** Cửa sổ khủng hoảng COVID đạt **AUROC 0.785** (có RAG **0.847**); giai đoạn rộng 2016–2020 đạt **0.710**. RAG là cải thiện ổn định và có ý nghĩa thống kê (+0.074, p=0.009 ở quy mô lớn). Mở rộng sang corpus toàn bộ 2016–2023 (lọc theo danh mục): base **0.615** / RAG **0.652** (lift **+0.037, p=0.047** — vẫn có ý nghĩa trên 78 sự kiện / 8 năm), nhưng *không vượt* bộ tin bundled gốc (chi tiết §9.2).
 
 ---
 
@@ -134,16 +134,16 @@ Kỹ thuật: **stream-and-filter** (không lưu file thô 23 GB), **đọc theo
 |---|---|---|---|---|---|
 | COVID (cùng cửa sổ) | 0.707 | **0.763** | +0.056 | 0.082 | 0.656 |
 | Rộng 2016–2020 | 0.693 | 0.681 | −0.012 | 0.66 (phẳng) | 0.677 |
-| **Toàn bộ 2016–2023 (78 sự kiện)** | 0.615 | **0.652** | +0.037 | **0.032 ✓** | 0.662 |
+| **Toàn bộ 2016–2023 (78 sự kiện)** | 0.615 | **0.652** | +0.037 | **0.047 ✓** | 0.662 |
 > p-value bootstrap có-cặp theo ngày (2.000 vòng); cũ bundled: COVID 0.785/0.847, rộng 0.710.
 
 **Đọc kết quả (trung thực + nhất quán với §9.1):**
 1. **Lọc theo danh mục đã SỬA lỗi:** COVID 0.37 (all-ticker hỏng) → **0.76**; rộng 0.50 → **0.69**.
-2. **RAG là cải thiện có ý nghĩa trên CẢ HAI corpus:** analyst-news +0.074 (p=0.009) **và** toàn FNSPID +0.037 (**p=0.032**). Chỉ *phẳng* ở lát hẹp FNSPID 2016–2020 (small-N) → **RAG giúp nơi có tiền lệ lịch sử sạch**, không phải mọi nơi (đây là luận điểm, không phải mâu thuẫn).
+2. **RAG là cải thiện có ý nghĩa trên CẢ HAI corpus:** analyst-news +0.074 (p=0.009) **và** toàn FNSPID +0.037 (**p=0.047**). Chỉ *phẳng* ở lát hẹp FNSPID 2016–2020 (small-N) → **RAG giúp nơi có tiền lệ lịch sử sạch**, không phải mọi nơi (đây là luận điểm, không phải mâu thuẫn).
 3. **news-volume phụ thuộc corpus:** gần ngẫu nhiên (~0.50) trên analyst-news, nhưng **mạnh (0.66) trên FNSPID** vì SỐ tin/ngày phản ánh mức chú ý thị trường — *vì thế ta test cả hai nguồn*. Trên FNSPID, TRR+RAG **ngang** baseline mạnh này; ưu thế suy luận rõ nhất ở nơi đếm-tin vô dụng (analyst-news).
 4. **Corpus lớn KHÔNG vượt bộ bundled** (0.76 < 0.847): *nhiều dữ liệu ≠ tốt hơn* khi bộ nhỏ đã tuyển khớp danh mục.
 
-**Kết luận phần này:** số rigorous đại diện là **toàn corpus 0.615 → 0.652 (+0.037, p=0.032)**; COVID 0.785/0.847 là **cận-trên best-case** một cú panic. Giá trị công đoạn corpus = trình diễn Big Data quy mô lớn + xác nhận RAG có ý nghĩa trên chuỗi 8 năm.
+**Kết luận phần này:** số rigorous đại diện là **toàn corpus 0.615 → 0.652 (+0.037, p=0.047)**; COVID 0.785/0.847 là **cận-trên best-case** một cú panic. Giá trị công đoạn corpus = trình diễn Big Data quy mô lớn + xác nhận RAG có ý nghĩa trên chuỗi 8 năm.
 
 ### 9.3 Số đo hạ tầng (đã có)
 - Tải corpus: ~39 MB/s, resumable; lọc cục bộ 22 GB → 12 GB.

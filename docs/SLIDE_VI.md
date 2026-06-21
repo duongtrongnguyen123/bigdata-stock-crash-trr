@@ -208,13 +208,13 @@
 
 ### SLIDE 14 — Kết quả chính (rigorous, toàn corpus 8 năm)
 **② Nội dung**
-- **Toàn corpus FNSPID 2016–2023 (78 sự kiện / 8 năm):** base 0.615 → **RAG 0.652**; lift **+0.037, p = 0.032** → *có ý nghĩa thống kê*.
-- **RAG có ý nghĩa trên CẢ HAI corpus:** analyst-news +0.074 (p=0.009) **và** FNSPID +0.037 (p=0.032).
+- **Toàn corpus FNSPID 2016–2023 (78 sự kiện / 8 năm):** base 0.615 → **RAG 0.652**; lift **+0.037, p = 0.047** → *có ý nghĩa thống kê*.
+- **RAG có ý nghĩa trên CẢ HAI corpus:** analyst-news +0.074 (p=0.009) **và** FNSPID +0.037 (p=0.047).
 - **Best-case** (cửa sổ panic COVID, bộ analyst-news): lên tới **0.785 → +RAG 0.847**.
 - Baseline "khối lượng tin": **mạnh trên FNSPID (0.66)**, gần ngẫu nhiên trên analyst-news (~0.50) — đối chiếu ở slide 15.
 
 **🎨 Hình ảnh — GROUPED BAR (2 nhóm):**
-> Trục Y = AUROC (0.4–0.9). Nhóm 1 "Toàn corpus 2016–2023" (base 0.615 / RAG 0.652, ghi nhãn "p=0.032 ✓"); Nhóm 2 "COVID best-case" (base 0.785 / +RAG 0.847). Mỗi nhóm 2 cột Base (xám) + RAG (xanh lá). Đường ngang đứt nét tại 0.50 "Ngẫu nhiên". Ghi giá trị trên cột.
+> Trục Y = AUROC (0.4–0.9). Nhóm 1 "Toàn corpus 2016–2023" (base 0.615 / RAG 0.652, ghi nhãn "p=0.047 ✓"); Nhóm 2 "COVID best-case" (base 0.785 / +RAG 0.847). Mỗi nhóm 2 cột Base (xám) + RAG (xanh lá). Đường ngang đứt nét tại 0.50 "Ngẫu nhiên". Ghi giá trị trên cột.
 
 **🎤 Ghi chú:** DẪN bằng số trung thực (toàn 8 năm, có ý nghĩa thống kê); COVID là cận-trên *best-case* một cú panic, không phải con số đại diện.
 
@@ -224,12 +224,12 @@
 **② Nội dung** — bảng same-window FNSPID (base / RAG / p / news-vol):
 - COVID: 0.707 / 0.763 / p=0.082 / 0.656  *(analyst-news cũ: 0.785 / 0.847)*
 - Rộng 2016–2020: 0.693 / 0.681 / p=0.66 *(phẳng)* / 0.677
-- **Toàn bộ 2016–2023: 0.615 / 0.652 / p=0.032 ✓ / 0.662**
+- **Toàn bộ 2016–2023: 0.615 / 0.652 / p=0.047 ✓ / 0.662**
 - **Đối chiếu 1 — news-volume phụ thuộc corpus:** gần ngẫu nhiên (~0.50) trên analyst-news, nhưng **mạnh (0.66) trên FNSPID** vì SỐ tin/ngày phản ánh mức chú ý thị trường → *vì thế ta test cả hai nguồn*.
-- **Đối chiếu 2 — RAG giúp nơi có tiền lệ lịch sử sạch:** có ý nghĩa trên analyst-news (+0.074, p=0.009) **và** toàn FNSPID (+0.037, p=0.032); chỉ *phẳng* ở lát hẹp 2016–2020 (small-N) — đúng luận điểm.
+- **Đối chiếu 2 — RAG giúp nơi có tiền lệ lịch sử sạch:** có ý nghĩa trên analyst-news (+0.074, p=0.009) **và** toàn FNSPID (+0.037, p=0.047); chỉ *phẳng* ở lát hẹp 2016–2020 (small-N) — đúng luận điểm.
 
 **🎨 Hình ảnh — BẢNG đối chiếu (3 hàng × 4 cột):**
-> Cột: Cửa sổ · Base · RAG · p-value · News-vol. 3 hàng (COVID / 2016–2020 / Toàn bộ). Tô **xanh lá** ô p<0.05 (Toàn bộ p=0.032), **xám** ô p>0.05. Dòng "Toàn bộ" in đậm. Chú thích nhỏ: "RAG thắng có ý nghĩa trên cả 2 corpus; news-vol mạnh-yếu tùy corpus".
+> Cột: Cửa sổ · Base · RAG · p-value · News-vol. 3 hàng (COVID / 2016–2020 / Toàn bộ). Tô **xanh lá** ô p<0.05 (Toàn bộ p=0.047), **xám** ô p>0.05. Dòng "Toàn bộ" in đậm. Chú thích nhỏ: "RAG thắng có ý nghĩa trên cả 2 corpus; news-vol mạnh-yếu tùy corpus".
 
 **🎤 Ghi chú:** Hai dòng đối chiếu BIẾN "mâu thuẫn 14↔15" thành luận điểm: baseline & RAG phụ thuộc corpus/cửa sổ — đó CHÍNH là lý do test nhiều cấu hình. (Nếu bị hỏi "sao baseline nhảy 0.50→0.66?" → corpus khác nhau.)
 
