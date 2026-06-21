@@ -221,7 +221,7 @@ with tab_live:
                 f"<span style='color:#64748b;font-size:0.82rem'>monitoring news · "
                 f"auto-refresh {_interval}s · updated {now} UTC</span>",
                 unsafe_allow_html=True)
-            st.markdown(f"**📝 News summary (7B, recency-weighted):** {summary}")
+            st.markdown(f"**📝 Live news summary (7B):** {summary}")
             col = _stress_color.get(stress, "#475569")
             st.markdown(
                 f"News-stress: <b style='color:{col}'>{stress}</b> "
@@ -232,13 +232,13 @@ with tab_live:
             c2.metric("Live headlines", nheads)
             c3.metric("Recent (≤6h)", recent)
             if tickers:
-                st.caption("Focus (recency-weighted): "
+                st.caption("Focus: "
                            + " · ".join(str(t[0]) for t in tickers))
             pc = st.columns(6)
             for i, (tk, row) in enumerate(prices.items()):
                 pc[i % 6].metric(tk, row["price"],
                                  f"{row['ret_1d']:+.2%}" if row["ret_1d"] is not None else "—")
-            with st.expander("Latest headlines (salient, recency-weighted)"):
+            with st.expander("Latest headlines"):
                 for h in top_recent:
                     st.write(f"**[{h['ticker']}]** {h['title']}")
         except Exception as exc:  # noqa: BLE001
