@@ -87,6 +87,28 @@ _RISK_COLOR = {"HIGH": "#dc2626", "ELEVATED": "#d97706", "LOW": "#16a34a"}
 _DR_PATH = os.path.join(_REPO_ROOT, "data", "live", "daily_report.json")
 _FIG_DIR = os.path.join(_REPO_ROOT, "reports", "figures")
 
+# All displayed times are shown in giờ Việt Nam (ICT, UTC+7).
+import datetime as _dt
+_ICT = _dt.timezone(_dt.timedelta(hours=7))
+
+
+def _vn_now(fmt="%H:%M:%S"):
+    return _dt.datetime.now(_ICT).strftime(fmt)
+
+
+def _vn(ts, fmt="%m-%d %H:%M"):
+    """Format a UTC datetime (naive or aware) in giờ VN."""
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=_dt.timezone.utc)
+    return ts.astimezone(_ICT).strftime(fmt)
+
+
+def _vn_iso(iso, fmt="%Y-%m-%d %H:%M"):
+    try:
+        return _dt.datetime.fromisoformat(iso).astimezone(_ICT).strftime(fmt)
+    except Exception:  # noqa: BLE001
+        return str(iso)
+
 
 # --- cached wrappers --------------------------------------------------------
 @st.cache_data(show_spinner=False)
@@ -151,7 +173,7 @@ with tab_live:
             lvl = adv["risk_level"]
             st.markdown(f"### Risk: <span style='color:{_RISK_COLOR.get(lvl,'#666')}'>"
                         f"{lvl}</span>", unsafe_allow_html=True)
-            st.caption(f"as of {adv.get('asof','?')} · "
+            st.caption(f"as of {_vn_iso(adv.get('asof','?'))} (giờ VN) · "
                        f"{str(adv.get('backend','?')).split(' (')[0]}")
         with col_a:
             if adv.get("at_risk_assets"):
@@ -189,7 +211,7 @@ with tab_live:
 
         from webapp import live as _live
         try:
-            now = _dt.datetime.now(_dt.timezone.utc).strftime("%H:%M:%S")
+            now = _vn_now()
             pd_ = _live.read_live_prices()           # daemon's cached prices (instant)
             if pd_:
                 prices, pmove = pd_["prices"], pd_["portfolio_move"]
@@ -219,7 +241,7 @@ with tab_live:
             st.markdown(
                 f"<span class='live-badge'><span class='live-dot'></span>LIVE</span> "
                 f"<span style='color:#64748b;font-size:0.82rem'>monitoring news · "
-                f"auto-refresh {_interval}s · updated {now} UTC</span>",
+                f"auto-refresh {_interval}s · updated {now} (giờ VN)</span>",
                 unsafe_allow_html=True)
             st.markdown(f"**📝 Live news summary (7B):** {summary}")
             col = _stress_color.get(stress, "#475569")
@@ -309,7 +331,7 @@ with tab_live:
                          "#16a34a" if any(w in low for w in _POS) else "#334155")
                 badge = ("<span style='background:#dc2626;color:#fff;border-radius:4px;"
                          "padding:0 5px;font-size:0.66rem'>🆕</span> " if r.get("new") else "")
-                t = r["ts"].strftime("%m-%d %H:%M")
+                t = _vn(r["ts"])
                 st.markdown(
                     f"<div style='padding:3px 0;border-bottom:1px solid #eef;"
                     f"animation:fadein .5s ease'>"
